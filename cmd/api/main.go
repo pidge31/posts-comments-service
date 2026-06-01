@@ -40,5 +40,4 @@ func main() {
 	}
 
 	log.Println("server stopped")
-
 }

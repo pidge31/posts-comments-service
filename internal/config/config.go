@@ -4,7 +4,7 @@ import "os"
 
 const (
 	DefaultPort        = "8080"
-	DefaultStoragetype = "memory"
+	DefaultStorageType = "memory"
 )
 
 type Config struct {
@@ -16,7 +16,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		Port:        getEnv("PORT", DefaultPort),
-		StorageType: getEnv("STORAGE_TYPE", DefaultStoragetype),
+		StorageType: getEnv("STORAGE_TYPE", DefaultStorageType),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 	}
 }
