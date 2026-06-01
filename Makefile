@@ -1,13 +1,9 @@
 APP_NAME=posts-comments-service
 
-.PHONY: run test test-race fmt tidy docker-build docker-up docker-down
+.PHONY: run test test-race fmt tidy generate docker-build docker-up docker-down
 
-build:
-	mkdir -p bin
-	go build -o bin/api ./cmd/api
-
-run: build
-	./bin/api
+run:
+	go run ./cmd/api
 
 test:
 	go test ./...
@@ -20,6 +16,9 @@ fmt:
 
 tidy:
 	go mod tidy
+
+generate:
+	go tool gqlgen generate
 
 docker-build:
 	docker build -t $(APP_NAME) .

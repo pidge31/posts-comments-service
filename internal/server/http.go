@@ -5,15 +5,23 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/99designs/gqlgen/graphql/playground"
 )
 
 type Server struct {
 	httpServer *http.Server
 }
 
-func New(port string) *Server {
+func New(port string, graphQLHandler http.Handler) *Server {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/health", healthHandler)
+
+	if graphQLHandler != nil {
+		mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
+		mux.Handle("/query", graphQLHandler)
+	}
 
 	return &Server{
 		httpServer: &http.Server{
@@ -42,12 +50,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
 	_, _ = w.Write([]byte(`{"status":"ok"}`))

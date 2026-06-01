@@ -1,0 +1,76 @@
+scalar Time
+
+directive @goField(forceResolver: Boolean, name: String) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
+type Post {
+  id: ID!
+  authorID: String!
+  title: String!
+  body: String!
+  commentsEnabled: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+
+  comments(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
+}
+
+type Comment {
+  id: ID!
+  postID: ID!
+  parentID: ID
+  authorID: String!
+  text: String!
+  createdAt: Time!
+
+  replies(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type PostEdge {
+  cursor: String!
+  node: Post!
+}
+
+type PostConnection {
+  edges: [PostEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CommentEdge {
+  cursor: String!
+  node: Comment!
+}
+
+type CommentConnection {
+  edges: [CommentEdge!]!
+  pageInfo: PageInfo!
+}
+
+input CreatePostInput {
+  authorID: String!
+  title: String!
+  body: String!
+  commentsEnabled: Boolean!
+}
+
+input AddCommentInput {
+  postID: ID!
+  parentID: ID
+  authorID: String!
+  text: String!
+}
+
+type Query {
+  posts(first: Int, after: String): PostConnection!
+  post(id: ID!): Post
+}
+
+type Mutation {
+  createPost(input: CreatePostInput!): Post!
+  addComment(input: AddCommentInput!): Comment!
+  setPostCommentsEnabled(postID: ID!, authorID: String!, enabled: Boolean!): Post!
+}

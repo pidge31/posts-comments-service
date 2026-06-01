@@ -8,17 +8,34 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pidge31/posts-comments-service/internal/app"
 	"github.com/pidge31/posts-comments-service/internal/config"
+	"github.com/pidge31/posts-comments-service/internal/graph"
 	"github.com/pidge31/posts-comments-service/internal/server"
+	"github.com/pidge31/posts-comments-service/internal/storage/memory"
 )
 
 func main() {
 	cfg := config.Load()
 
-	httpServer := server.New(cfg.Port)
+	if cfg.StorageType != "memory" {
+		log.Fatalf("unsupported storage type %q", cfg.StorageType)
+	}
+
+	store := memory.NewStore()
+
+	postRepository := memory.NewPostRepository(store)
+	commentRepository := memory.NewCommentRepository(store)
+
+	postService := app.NewPostService(postRepository)
+	commentService := app.NewCommentService(postRepository, commentRepository)
+
+	graphQLHandler := graph.NewHandler(postService, commentService)
+
+	httpServer := server.New(cfg.Port, graphQLHandler)
 
 	go func() {
-		log.Printf("server starting posts-comments-service on port %s", cfg.Port)
+		log.Printf("starting posts-comments-service on port %s", cfg.Port)
 
 		if err := httpServer.Run(); err != nil {
 			log.Fatalf("failed to run server: %v", err)
