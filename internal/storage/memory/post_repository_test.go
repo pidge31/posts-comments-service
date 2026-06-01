@@ -85,7 +85,7 @@ func TestPostRepositoryRespectsCanceledContext(t *testing.T) {
 	}
 }
 
-func TestPostRepositoryUpdateCommentsEnabled(t *testing.T) {
+func TestPostRepositorySetCommentsEnabled(t *testing.T) {
 	t.Parallel()
 
 	repo := NewPostRepository(NewStore())
@@ -99,7 +99,7 @@ func TestPostRepositoryUpdateCommentsEnabled(t *testing.T) {
 		t.Fatalf("create post: %v", err)
 	}
 
-	if err := repo.UpdateCommentsEnabled(context.Background(), "post-1", false); err != nil {
+	if err := repo.SetCommentsEnabled(context.Background(), "post-1", false, time.Now()); err != nil {
 		t.Fatalf("update comments enabled: %v", err)
 	}
 

@@ -50,7 +50,7 @@ func (r *CommentRepository) GetByID(ctx context.Context, id string) (*domain.Com
 
 	comment, ok := r.store.comments[id]
 	if !ok {
-		return nil, domain.ErrNotFound
+		return nil, domain.ErrCommentNotFound
 	}
 
 	return &comment, nil

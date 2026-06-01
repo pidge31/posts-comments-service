@@ -3,11 +3,8 @@ package domain
 import "time"
 
 const (
-	DefaultPostPageSize = 10
-	MaxPostPageSize     = 30
-
-	DefaultCommentPageSize = 20
-	MaxCommentPageSize     = 50
+	DefaultPageSize = 20
+	MaxPageSize     = 50
 )
 
 type PageInfo struct {

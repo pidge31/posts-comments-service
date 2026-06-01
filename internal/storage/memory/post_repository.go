@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/pidge31/posts-comments-service/internal/domain"
 	"github.com/pidge31/posts-comments-service/internal/ports"
@@ -47,7 +48,7 @@ func (r *PostRepository) GetByID(ctx context.Context, id string) (*domain.Post, 
 
 	post, ok := r.store.posts[id]
 	if !ok {
-		return nil, domain.ErrNotFound
+		return nil, domain.ErrPostNotFound
 	}
 
 	return &post, nil
@@ -102,10 +103,11 @@ func (r *PostRepository) List(
 	return page, nextCursor, nil
 }
 
-func (r *PostRepository) UpdateCommentsEnabled(
+func (r *PostRepository) SetCommentsEnabled(
 	ctx context.Context,
 	postID string,
 	enabled bool,
+	updatedAt time.Time,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -116,10 +118,12 @@ func (r *PostRepository) UpdateCommentsEnabled(
 
 	post, ok := r.store.posts[postID]
 	if !ok {
-		return domain.ErrNotFound
+		return domain.ErrPostNotFound
 	}
 
 	post.CommentsEnabled = enabled
+	post.UpdatedAt = updatedAt
+
 	r.store.posts[postID] = post
 
 	return nil

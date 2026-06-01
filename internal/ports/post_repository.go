@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/pidge31/posts-comments-service/internal/domain"
 )
@@ -17,9 +18,10 @@ type PostRepository interface {
 		cursor *domain.PostCursor,
 	) ([]domain.Post, *domain.PostCursor, error)
 
-	UpdateCommentsEnabled(
+	SetCommentsEnabled(
 		ctx context.Context,
 		postID string,
 		enabled bool,
+		updatedAt time.Time,
 	) error
 }
