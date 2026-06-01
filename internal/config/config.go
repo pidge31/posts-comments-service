@@ -2,6 +2,11 @@ package config
 
 import "os"
 
+const (
+	DefaultPort        = "8080"
+	DefaultStoragetype = "memory"
+)
+
 type Config struct {
 	Port        string
 	StorageType string
@@ -10,9 +15,9 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		Port:        getEnv("PORT", "8080"),
-		StorageType: getEnv("STORAGE_TYPE", "memory"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
+		Port:        getEnv("PORT", DefaultPort),
+		StorageType: getEnv("STORAGE_TYPE", DefaultStoragetype),
+		DatabaseURL: getEnv("DATABASE_URL", ""),
 	}
 }
 
