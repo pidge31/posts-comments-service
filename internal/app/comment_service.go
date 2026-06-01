@@ -106,6 +106,10 @@ func (s *CommentService) ListComments(
 		return nil, nil, domain.ErrInvalidInput
 	}
 
+	if _, err := s.postRepository.GetByID(ctx, postID); err != nil {
+		return nil, nil, err
+	}
+
 	limit = normalizePageLimit(limit)
 	parentID = normalizeOptionalID(parentID)
 

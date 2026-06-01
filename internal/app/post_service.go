@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -35,6 +36,14 @@ func (s *PostService) CreatePost(ctx context.Context, input CreatePostInput) (*d
 
 	if authorID == "" || title == "" || body == "" {
 		return nil, domain.ErrInvalidInput
+	}
+
+	if utf8.RuneCountInString(title) > domain.MaxPostTitleLength {
+		return nil, domain.ErrPostTitleTooLong
+	}
+
+	if utf8.RuneCountInString(body) > domain.MaxPostBodyLength {
+		return nil, domain.ErrPostBodyTooLong
 	}
 
 	now := time.Now().UTC()

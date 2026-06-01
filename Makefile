@@ -1,6 +1,6 @@
 APP_NAME=posts-comments-service
 
-.PHONY: run test fmt tidy docker-build docker-up docker-down
+.PHONY: run test test-race fmt tidy docker-build docker-up docker-down
 
 build:
 	mkdir -p bin
@@ -11,6 +11,9 @@ run: build
 
 test:
 	go test ./...
+
+test-race:
+	go test ./... -race
 
 fmt:
 	go fmt ./...
