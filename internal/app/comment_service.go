@@ -13,8 +13,9 @@ import (
 )
 
 type CommentService struct {
-	postRepository    ports.PostRepository
-	commentRepository ports.CommentRepository
+	postRepository        ports.PostRepository
+	commentRepository     ports.CommentRepository
+	commentEventPublisher ports.CommentEventPublisher
 }
 
 type AddCommentInput struct {
@@ -27,10 +28,18 @@ type AddCommentInput struct {
 func NewCommentService(
 	postRepository ports.PostRepository,
 	commentRepository ports.CommentRepository,
+	commentEventPublisher ...ports.CommentEventPublisher,
 ) *CommentService {
+	publisher := ports.CommentEventPublisher(noopCommentEventPublisher{})
+
+	if len(commentEventPublisher) > 0 && commentEventPublisher[0] != nil {
+		publisher = commentEventPublisher[0]
+	}
+
 	return &CommentService{
-		postRepository:    postRepository,
-		commentRepository: commentRepository,
+		postRepository:        postRepository,
+		commentRepository:     commentRepository,
+		commentEventPublisher: publisher,
 	}
 }
 
@@ -82,6 +91,10 @@ func (s *CommentService) AddComment(ctx context.Context, input AddCommentInput) 
 		return nil, err
 	}
 
+	if err := s.commentEventPublisher.PublishCommentCreated(ctx, comment); err != nil {
+		return nil, err
+	}
+
 	return &comment, nil
 }
 
@@ -127,4 +140,10 @@ func normalizeOptionalID(id *string) *string {
 	}
 
 	return &trimmed
+}
+
+type noopCommentEventPublisher struct{}
+
+func (noopCommentEventPublisher) PublishCommentCreated(ctx context.Context, comment domain.Comment) error {
+	return nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/pidge31/posts-comments-service/internal/graph"
 	"github.com/pidge31/posts-comments-service/internal/server"
 	"github.com/pidge31/posts-comments-service/internal/storage/memory"
+	"github.com/pidge31/posts-comments-service/internal/subscriptions"
 )
 
 func main() {
@@ -27,10 +28,12 @@ func main() {
 	postRepository := memory.NewPostRepository(store)
 	commentRepository := memory.NewCommentRepository(store)
 
-	postService := app.NewPostService(postRepository)
-	commentService := app.NewCommentService(postRepository, commentRepository)
+	commentBroker := subscriptions.NewBroker()
 
-	graphQLHandler := graph.NewHandler(postService, commentService)
+	postService := app.NewPostService(postRepository)
+	commentService := app.NewCommentService(postRepository, commentRepository, commentBroker)
+
+	graphQLHandler := graph.NewHandler(postService, commentService, commentBroker)
 
 	httpServer := server.New(cfg.Port, graphQLHandler)
 

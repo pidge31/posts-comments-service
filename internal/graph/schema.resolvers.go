@@ -120,6 +120,44 @@ func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error
 	return postToModel(*post), nil
 }
 
+// CommentAdded is the resolver for the commentAdded field.
+func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error) {
+	if _, err := r.postService.GetPost(ctx, postID); err != nil {
+		return nil, err
+	}
+
+	comments, unsubscribe, err := r.commentEventSubscriber.SubscribeToPostComments(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(chan *model.Comment, 1)
+
+	go func() {
+		defer unsubscribe()
+		defer close(out)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case comment, ok := <-comments:
+				if !ok {
+					return
+				}
+
+				select {
+				case out <- commentToModel(comment):
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return out, nil
+}
+
 // Comment returns generated.CommentResolver implementation.
 func (r *Resolver) Comment() generated.CommentResolver { return &commentResolver{r} }
 
@@ -132,7 +170,11 @@ func (r *Resolver) Post() generated.PostResolver { return &postResolver{r} }
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
+// Subscription returns generated.SubscriptionResolver implementation.
+func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
+
 type commentResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }
