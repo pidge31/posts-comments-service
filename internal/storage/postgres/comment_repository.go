@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -49,7 +51,7 @@ func (r *CommentRepository) Create(ctx context.Context, comment domain.Comment) 
 		comment.CreatedAt,
 	)
 
-	return mapPostgresError(err)
+	return mapPostgresCommentError(err)
 }
 
 func (r *CommentRepository) GetByID(ctx context.Context, id string) (*domain.Comment, error) {
@@ -79,7 +81,7 @@ func (r *CommentRepository) GetByID(ctx context.Context, id string) (*domain.Com
 		&comment.CreatedAt,
 	)
 	if err != nil {
-		return nil, mapPostgresError(err)
+		return nil, mapPostgresCommentError(err)
 	}
 
 	if parentID.Valid {
@@ -96,61 +98,144 @@ func (r *CommentRepository) ListByPostAndParent(
 	limit int,
 	cursor *domain.CommentCursor,
 ) ([]domain.Comment, *domain.CommentCursor, error) {
-	if limit <= 0 {
+	pages, err := r.ListByPostAndParents(ctx, []ports.CommentListRequest{
+		{
+			PostID:   postID,
+			ParentID: parentID,
+			Limit:    limit,
+			Cursor:   cursor,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(pages) == 0 {
 		return []domain.Comment{}, nil, nil
 	}
 
-	var parentIDValue any
-	if parentID != nil {
-		parentIDValue = *parentID
+	return pages[0].Comments, pages[0].NextCursor, nil
+}
+
+func (r *CommentRepository) ListByPostAndParents(
+	ctx context.Context,
+	requests []ports.CommentListRequest,
+) ([]ports.CommentListPage, error) {
+	pages := make([]ports.CommentListPage, len(requests))
+
+	if len(requests) == 0 {
+		return pages, nil
 	}
 
-	var cursorCreatedAt any
-	var cursorID any
+	activeRequests := make([]ports.CommentListRequest, 0, len(requests))
+	activeIndexes := make([]int, 0, len(requests))
 
-	if cursor != nil {
-		cursorCreatedAt = cursor.CreatedAt
-		cursorID = cursor.ID
+	for index, request := range requests {
+		if request.Limit <= 0 {
+			continue
+		}
+
+		activeRequests = append(activeRequests, request)
+		activeIndexes = append(activeIndexes, index)
+	}
+
+	if len(activeRequests) == 0 {
+		return pages, nil
+	}
+
+	values := make([]string, 0, len(activeRequests))
+	args := make([]any, 0, len(activeRequests)*6)
+
+	for index, request := range activeRequests {
+		var parentIDValue any
+		if request.ParentID != nil {
+			parentIDValue = *request.ParentID
+		}
+
+		var cursorCreatedAt any
+		var cursorID any
+
+		if request.Cursor != nil {
+			cursorCreatedAt = request.Cursor.CreatedAt
+			cursorID = request.Cursor.ID
+		}
+
+		offset := len(args) + 1
+		values = append(values, fmt.Sprintf(
+			"($%d::int, $%d::uuid, $%d::uuid, $%d::timestamptz, $%d::uuid, $%d::int)",
+			offset,
+			offset+1,
+			offset+2,
+			offset+3,
+			offset+4,
+			offset+5,
+		))
+		args = append(
+			args,
+			activeIndexes[index],
+			request.PostID,
+			parentIDValue,
+			cursorCreatedAt,
+			cursorID,
+			request.Limit,
+		)
 	}
 
 	rows, err := r.pool.Query(
 		ctx,
 		`
+		WITH requests (
+			request_index,
+			post_id,
+			parent_id,
+			cursor_created_at,
+			cursor_id,
+			page_limit
+		) AS (
+			VALUES `+strings.Join(values, ",")+`
+		)
 		SELECT
-			id::text,
-			post_id::text,
-			parent_id::text,
-			author_id,
-			text,
-			created_at
-		FROM comments
-		WHERE post_id = $1::uuid
-		  AND parent_id IS NOT DISTINCT FROM $2::uuid
-		  AND (
-		  	$3::timestamptz IS NULL
-		  	OR (created_at, id) > ($3::timestamptz, $4::uuid)
-		  )
-		ORDER BY created_at ASC, id ASC
-		LIMIT $5
+			requests.request_index,
+			listed_comments.id::text,
+			listed_comments.post_id::text,
+			listed_comments.parent_id::text,
+			listed_comments.author_id,
+			listed_comments.text,
+			listed_comments.created_at
+		FROM requests
+		JOIN LATERAL (
+			SELECT
+				id,
+				post_id,
+				parent_id,
+				author_id,
+				text,
+				created_at
+			FROM comments
+			WHERE post_id = requests.post_id
+			  AND parent_id IS NOT DISTINCT FROM requests.parent_id
+			  AND (
+			  	requests.cursor_created_at IS NULL
+			  	OR (created_at, id) > (requests.cursor_created_at, requests.cursor_id)
+			  )
+			ORDER BY created_at ASC, id ASC
+			LIMIT requests.page_limit + 1
+		) AS listed_comments ON TRUE
+		ORDER BY requests.request_index ASC, listed_comments.created_at ASC, listed_comments.id ASC
 		`,
-		postID,
-		parentIDValue,
-		cursorCreatedAt,
-		cursorID,
-		limit+1,
+		args...,
 	)
 	if err != nil {
-		return nil, nil, mapPostgresError(err)
+		return nil, mapPostgresCommentError(err)
 	}
 	defer rows.Close()
 
-	comments := make([]domain.Comment, 0, limit+1)
-
 	for rows.Next() {
+		var requestIndex int
 		var comment domain.Comment
 		var scannedParentID sql.NullString
 
 		if err := rows.Scan(
+			&requestIndex,
 			&comment.ID,
 			&comment.PostID,
 			&scannedParentID,
@@ -158,30 +243,36 @@ func (r *CommentRepository) ListByPostAndParent(
 			&comment.Text,
 			&comment.CreatedAt,
 		); err != nil {
-			return nil, nil, mapPostgresError(err)
+			return nil, mapPostgresCommentError(err)
+		}
+
+		if requestIndex < 0 || requestIndex >= len(pages) {
+			return nil, domain.ErrInvalidInput
 		}
 
 		if scannedParentID.Valid {
 			comment.ParentID = &scannedParentID.String
 		}
 
-		comments = append(comments, comment)
+		pages[requestIndex].Comments = append(pages[requestIndex].Comments, comment)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, nil, mapPostgresError(err)
+		return nil, mapPostgresCommentError(err)
 	}
 
-	var nextCursor *domain.CommentCursor
-	if len(comments) > limit {
-		lastComment := comments[limit-1]
-		nextCursor = &domain.CommentCursor{
+	for index, request := range requests {
+		if len(pages[index].Comments) <= request.Limit {
+			continue
+		}
+
+		lastComment := pages[index].Comments[request.Limit-1]
+		pages[index].NextCursor = &domain.CommentCursor{
 			CreatedAt: lastComment.CreatedAt,
 			ID:        lastComment.ID,
 		}
-
-		comments = comments[:limit]
+		pages[index].Comments = pages[index].Comments[:request.Limit]
 	}
 
-	return comments, nextCursor, nil
+	return pages, nil
 }

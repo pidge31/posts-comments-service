@@ -18,4 +18,21 @@ type CommentRepository interface {
 		limit int,
 		cursor *domain.CommentCursor,
 	) ([]domain.Comment, *domain.CommentCursor, error)
+
+	ListByPostAndParents(
+		ctx context.Context,
+		requests []CommentListRequest,
+	) ([]CommentListPage, error)
+}
+
+type CommentListRequest struct {
+	PostID   string
+	ParentID *string
+	Limit    int
+	Cursor   *domain.CommentCursor
+}
+
+type CommentListPage struct {
+	Comments   []domain.Comment
+	NextCursor *domain.CommentCursor
 }

@@ -25,6 +25,18 @@ type AddCommentInput struct {
 	Text     string
 }
 
+type CommentPageRequest struct {
+	PostID   string
+	ParentID *string
+	Limit    int
+	Cursor   *domain.CommentCursor
+}
+
+type CommentPage struct {
+	Comments   []domain.Comment
+	NextCursor *domain.CommentCursor
+}
+
 func NewCommentService(
 	postRepository ports.PostRepository,
 	commentRepository ports.CommentRepository,
@@ -123,10 +135,65 @@ func (s *CommentService) ListComments(
 		return nil, nil, err
 	}
 
+	return s.ListCommentsForExistingPost(ctx, postID, parentID, limit, cursor)
+}
+
+func (s *CommentService) ListCommentsForExistingPost(
+	ctx context.Context,
+	postID string,
+	parentID *string,
+	limit int,
+	cursor *domain.CommentCursor,
+) ([]domain.Comment, *domain.CommentCursor, error) {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return nil, nil, domain.ErrInvalidInput
+	}
+
 	limit = normalizePageLimit(limit)
 	parentID = normalizeOptionalID(parentID)
 
 	return s.commentRepository.ListByPostAndParent(ctx, postID, parentID, limit, cursor)
+}
+
+func (s *CommentService) ListCommentPagesForExistingPosts(
+	ctx context.Context,
+	requests []CommentPageRequest,
+) ([]CommentPage, error) {
+	repositoryRequests := make([]ports.CommentListRequest, 0, len(requests))
+
+	for _, request := range requests {
+		postID := strings.TrimSpace(request.PostID)
+		if postID == "" {
+			return nil, domain.ErrInvalidInput
+		}
+
+		repositoryRequests = append(repositoryRequests, ports.CommentListRequest{
+			PostID:   postID,
+			ParentID: normalizeOptionalID(request.ParentID),
+			Limit:    normalizePageLimit(request.Limit),
+			Cursor:   request.Cursor,
+		})
+	}
+
+	repositoryPages, err := s.commentRepository.ListByPostAndParents(ctx, repositoryRequests)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(repositoryPages) != len(requests) {
+		return nil, domain.ErrInvalidInput
+	}
+
+	pages := make([]CommentPage, 0, len(repositoryPages))
+	for _, repositoryPage := range repositoryPages {
+		pages = append(pages, CommentPage{
+			Comments:   repositoryPage.Comments,
+			NextCursor: repositoryPage.NextCursor,
+		})
+	}
+
+	return pages, nil
 }
 
 func normalizeOptionalID(id *string) *string {

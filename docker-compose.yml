@@ -8,8 +8,25 @@ services:
       STORAGE_TYPE: postgres
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/posts_comments?sslmode=disable
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        psql -h postgres -U postgres -d posts_comments -f /migrations/001_create_posts.up.sql
+        psql -h postgres -U postgres -d posts_comments -f /migrations/002_create_comments.up.sql
 
   postgres:
     image: postgres:16-alpine

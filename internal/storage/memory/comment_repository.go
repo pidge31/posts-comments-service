@@ -107,6 +107,33 @@ func (r *CommentRepository) ListByPostAndParent(
 	return page, nextCursor, nil
 }
 
+func (r *CommentRepository) ListByPostAndParents(
+	ctx context.Context,
+	requests []ports.CommentListRequest,
+) ([]ports.CommentListPage, error) {
+	pages := make([]ports.CommentListPage, 0, len(requests))
+
+	for _, request := range requests {
+		comments, nextCursor, err := r.ListByPostAndParent(
+			ctx,
+			request.PostID,
+			request.ParentID,
+			request.Limit,
+			request.Cursor,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		pages = append(pages, ports.CommentListPage{
+			Comments:   comments,
+			NextCursor: nextCursor,
+		})
+	}
+
+	return pages, nil
+}
+
 func (r *CommentRepository) listCommentsByParent(postID string, parentID *string) []domain.Comment {
 	r.store.mu.RLock()
 	defer r.store.mu.RUnlock()

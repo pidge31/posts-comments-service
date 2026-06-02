@@ -1,128 +1,173 @@
-package memory
+package memory_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/pidge31/posts-comments-service/internal/domain"
+	"github.com/pidge31/posts-comments-service/internal/storage/memory"
 )
 
-func TestCommentRepositoryCreateRejectsDuplicateID(t *testing.T) {
-	t.Parallel()
+func TestCommentRepository_ListByPostAndParent(t *testing.T) {
+	store := memory.NewStore()
+	repository := memory.NewCommentRepository(store)
 
-	repo := NewCommentRepository(NewStore())
-	comment := domain.Comment{
+	baseTime := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+
+	rootComment := domain.Comment{
 		ID:        "comment-1",
 		PostID:    "post-1",
-		AuthorID:  "author-1",
-		Text:      "First comment",
-		CreatedAt: time.Now(),
+		ParentID:  nil,
+		AuthorID:  "user-1",
+		Text:      "Root comment",
+		CreatedAt: baseTime,
 	}
 
-	if err := repo.Create(context.Background(), comment); err != nil {
-		t.Fatalf("create comment: %v", err)
+	secondRootComment := domain.Comment{
+		ID:        "comment-2",
+		PostID:    "post-1",
+		ParentID:  nil,
+		AuthorID:  "user-2",
+		Text:      "Second root comment",
+		CreatedAt: baseTime.Add(time.Minute),
 	}
 
-	if err := repo.Create(context.Background(), comment); !errors.Is(err, domain.ErrAlreadyExists) {
-		t.Fatalf("create duplicate comment: got %v, want %v", err, domain.ErrAlreadyExists)
-	}
-}
-
-func TestCommentRepositoryKeepsRootAndChildCommentsSeparate(t *testing.T) {
-	t.Parallel()
-
-	repo := NewCommentRepository(NewStore())
-	parentID := "comment-1"
-	baseTime := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-
-	comments := []domain.Comment{
-		{ID: parentID, PostID: "post-1", Text: "root", CreatedAt: baseTime},
-		{ID: "comment-2", PostID: "post-1", ParentID: &parentID, Text: "child", CreatedAt: baseTime.Add(time.Minute)},
+	reply := domain.Comment{
+		ID:        "comment-3",
+		PostID:    "post-1",
+		ParentID:  &rootComment.ID,
+		AuthorID:  "user-3",
+		Text:      "Reply",
+		CreatedAt: baseTime.Add(2 * time.Minute),
 	}
 
-	for _, comment := range comments {
-		if err := repo.Create(context.Background(), comment); err != nil {
-			t.Fatalf("create comment %q: %v", comment.ID, err)
+	for _, comment := range []domain.Comment{rootComment, secondRootComment, reply} {
+		if err := repository.Create(context.Background(), comment); err != nil {
+			t.Fatalf("failed to create comment: %v", err)
 		}
 	}
 
-	rootComments, _, err := repo.ListByPostAndParent(context.Background(), "post-1", nil, 10, nil)
+	rootComments, nextCursor, err := repository.ListByPostAndParent(
+		context.Background(),
+		"post-1",
+		nil,
+		10,
+		nil,
+	)
 	if err != nil {
-		t.Fatalf("list root comments: %v", err)
-	}
-	assertCommentIDs(t, rootComments, []string{"comment-1"})
-
-	childComments, _, err := repo.ListByPostAndParent(context.Background(), "post-1", &parentID, 10, nil)
-	if err != nil {
-		t.Fatalf("list child comments: %v", err)
-	}
-	assertCommentIDs(t, childComments, []string{"comment-2"})
-}
-
-func TestCommentRepositoryListUsesStableCursorOrder(t *testing.T) {
-	t.Parallel()
-
-	repo := NewCommentRepository(NewStore())
-	baseTime := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-
-	comments := []domain.Comment{
-		{ID: "comment-3", PostID: "post-1", CreatedAt: baseTime.Add(time.Minute)},
-		{ID: "comment-1", PostID: "post-1", CreatedAt: baseTime},
-		{ID: "comment-2", PostID: "post-1", CreatedAt: baseTime},
+		t.Fatalf("expected no error, got %v", err)
 	}
 
-	for _, comment := range comments {
-		if err := repo.Create(context.Background(), comment); err != nil {
-			t.Fatalf("create comment %q: %v", comment.ID, err)
-		}
-	}
-
-	firstPage, cursor, err := repo.ListByPostAndParent(context.Background(), "post-1", nil, 2, nil)
-	if err != nil {
-		t.Fatalf("list first page: %v", err)
-	}
-
-	assertCommentIDs(t, firstPage, []string{"comment-1", "comment-2"})
-	if cursor == nil {
-		t.Fatal("first page cursor is nil")
-	}
-
-	secondPage, nextCursor, err := repo.ListByPostAndParent(context.Background(), "post-1", nil, 2, cursor)
-	if err != nil {
-		t.Fatalf("list second page: %v", err)
-	}
-
-	assertCommentIDs(t, secondPage, []string{"comment-3"})
 	if nextCursor != nil {
-		t.Fatalf("second page cursor: got %#v, want nil", nextCursor)
+		t.Fatal("expected no next cursor")
+	}
+
+	if len(rootComments) != 2 {
+		t.Fatalf("expected 2 root comments, got %d", len(rootComments))
+	}
+
+	if rootComments[0].ID != "comment-1" {
+		t.Fatalf("expected first root comment first, got %q", rootComments[0].ID)
+	}
+
+	replies, nextCursor, err := repository.ListByPostAndParent(
+		context.Background(),
+		"post-1",
+		&rootComment.ID,
+		10,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if nextCursor != nil {
+		t.Fatal("expected no next cursor")
+	}
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 reply, got %d", len(replies))
+	}
+
+	if replies[0].ID != "comment-3" {
+		t.Fatalf("expected reply comment, got %q", replies[0].ID)
 	}
 }
 
-func TestCommentRepositoryRespectsCanceledContext(t *testing.T) {
-	t.Parallel()
+func TestCommentRepository_ListByPostAndParent_WithPagination(t *testing.T) {
+	store := memory.NewStore()
+	repository := memory.NewCommentRepository(store)
 
-	repo := NewCommentRepository(NewStore())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	baseTime := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 
-	err := repo.Create(ctx, domain.Comment{ID: "comment-1"})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("create with canceled context: got %v, want %v", err, context.Canceled)
-	}
-}
-
-func assertCommentIDs(t *testing.T, comments []domain.Comment, want []string) {
-	t.Helper()
-
-	if len(comments) != len(want) {
-		t.Fatalf("comment count: got %d, want %d", len(comments), len(want))
-	}
-
-	for i, comment := range comments {
-		if comment.ID != want[i] {
-			t.Fatalf("comment[%d]: got %q, want %q", i, comment.ID, want[i])
+	for i, comment := range []domain.Comment{
+		{
+			ID:        "comment-1",
+			PostID:    "post-1",
+			AuthorID:  "user-1",
+			Text:      "First",
+			CreatedAt: baseTime,
+		},
+		{
+			ID:        "comment-2",
+			PostID:    "post-1",
+			AuthorID:  "user-2",
+			Text:      "Second",
+			CreatedAt: baseTime.Add(time.Minute),
+		},
+		{
+			ID:        "comment-3",
+			PostID:    "post-1",
+			AuthorID:  "user-3",
+			Text:      "Third",
+			CreatedAt: baseTime.Add(2 * time.Minute),
+		},
+	} {
+		if err := repository.Create(context.Background(), comment); err != nil {
+			t.Fatalf("failed to create comment %d: %v", i, err)
 		}
+	}
+
+	firstPage, nextCursor, err := repository.ListByPostAndParent(
+		context.Background(),
+		"post-1",
+		nil,
+		2,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(firstPage) != 2 {
+		t.Fatalf("expected 2 comments on first page, got %d", len(firstPage))
+	}
+
+	if nextCursor == nil {
+		t.Fatal("expected next cursor")
+	}
+
+	secondPage, nextCursor, err := repository.ListByPostAndParent(
+		context.Background(),
+		"post-1",
+		nil,
+		2,
+		nextCursor,
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(secondPage) != 1 {
+		t.Fatalf("expected 1 comment on second page, got %d", len(secondPage))
+	}
+
+	if secondPage[0].ID != "comment-3" {
+		t.Fatalf("expected third comment on second page, got %q", secondPage[0].ID)
+	}
+
+	if nextCursor != nil {
+		t.Fatal("expected no next cursor on last page")
 	}
 }

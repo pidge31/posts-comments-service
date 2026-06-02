@@ -1,6 +1,6 @@
 APP_NAME=posts-comments-service
 
-.PHONY: run test test-race fmt tidy generate docker-build docker-up docker-down migrate-up migrate-down
+.PHONY: run test test-race test-integration fmt tidy generate docker-build docker-up docker-down migrate-up migrate-down
 
 run:
 	go run ./cmd/api
@@ -10,6 +10,9 @@ test:
 
 test-race:
 	go test ./... -race
+
+test-integration:
+	go test ./tests/integration -count=1
 
 fmt:
 	go fmt ./...

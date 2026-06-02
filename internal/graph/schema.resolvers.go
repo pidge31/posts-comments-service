@@ -20,18 +20,21 @@ func (r *commentResolver) Replies(ctx context.Context, obj *model.Comment, first
 		return nil, err
 	}
 
-	comments, nextCursor, err := r.commentService.ListComments(
+	page, err := loadCommentPage(
 		ctx,
-		obj.PostID,
-		&obj.ID,
-		limitFromPointer(first),
-		cursor,
+		r.commentService,
+		app.CommentPageRequest{
+			PostID:   obj.PostID,
+			ParentID: &obj.ID,
+			Limit:    limitFromPointer(first),
+			Cursor:   cursor,
+		},
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return commentsToConnection(comments, nextCursor != nil), nil
+	return commentsToConnection(page.Comments, page.NextCursor != nil), nil
 }
 
 // CreatePost is the resolver for the createPost field.
@@ -81,18 +84,20 @@ func (r *postResolver) Comments(ctx context.Context, obj *model.Post, first *int
 		return nil, err
 	}
 
-	comments, nextCursor, err := r.commentService.ListComments(
+	page, err := loadCommentPage(
 		ctx,
-		obj.ID,
-		nil,
-		limitFromPointer(first),
-		cursor,
+		r.commentService,
+		app.CommentPageRequest{
+			PostID: obj.ID,
+			Limit:  limitFromPointer(first),
+			Cursor: cursor,
+		},
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return commentsToConnection(comments, nextCursor != nil), nil
+	return commentsToConnection(page.Comments, page.NextCursor != nil), nil
 }
 
 // Posts is the resolver for the posts field.

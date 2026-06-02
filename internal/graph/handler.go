@@ -1,9 +1,11 @@
 package graph
 
 import (
+	"context"
 	"net/http"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/gorilla/websocket"
@@ -27,6 +29,10 @@ func NewHandler(
 			},
 		),
 	)
+
+	server.AroundOperations(func(ctx context.Context, next graphql.OperationHandler) graphql.ResponseHandler {
+		return next(withCommentPageLoader(ctx, newCommentPageLoader(commentService)))
+	})
 
 	server.AddTransport(transport.Websocket{
 		KeepAlivePingInterval: 10 * time.Second,

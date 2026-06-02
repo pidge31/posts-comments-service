@@ -30,6 +30,7 @@ func (b *Broker) PublishCommentCreated(ctx context.Context, comment domain.Comme
 		case subscriber <- comment:
 		case <-ctx.Done():
 			return ctx.Err()
+		default:
 		}
 	}
 
