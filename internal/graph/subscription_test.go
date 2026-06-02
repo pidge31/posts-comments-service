@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/pidge31/posts-comments-service/internal/app"
+	"github.com/pidge31/posts-comments-service/internal/domain"
 	"github.com/pidge31/posts-comments-service/internal/graph"
 	"github.com/pidge31/posts-comments-service/internal/storage/memory"
 	"github.com/pidge31/posts-comments-service/internal/subscriptions"
@@ -21,7 +22,8 @@ import (
 func TestCommentAddedSubscriptionReceivesNewComments(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(newTestGraphHandler())
+	handler, broker := newTestGraphHandler()
+	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	postID := createPost(t, server.URL)
@@ -58,6 +60,8 @@ func TestCommentAddedSubscriptionReceivesNewComments(t *testing.T) {
 		},
 	})
 
+	waitForSubscription(t, broker, postID)
+
 	addComment(t, server.URL, postID)
 
 	message := readGraphQLWSMessageOfType(t, conn, "data")
@@ -74,17 +78,60 @@ func TestCommentAddedSubscriptionReceivesNewComments(t *testing.T) {
 	}
 }
 
-func newTestGraphHandler() http.Handler {
+type recordingCommentBroker struct {
+	*subscriptions.Broker
+
+	subscribed chan string
+}
+
+func newRecordingCommentBroker() *recordingCommentBroker {
+	return &recordingCommentBroker{
+		Broker:     subscriptions.NewBroker(),
+		subscribed: make(chan string, 1),
+	}
+}
+
+func (b *recordingCommentBroker) SubscribeToPostComments(
+	ctx context.Context,
+	postID string,
+) (<-chan domain.Comment, func(), error) {
+	comments, unsubscribe, err := b.Broker.SubscribeToPostComments(ctx, postID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	select {
+	case b.subscribed <- postID:
+	default:
+	}
+
+	return comments, unsubscribe, nil
+}
+
+func waitForSubscription(t *testing.T, broker *recordingCommentBroker, postID string) {
+	t.Helper()
+
+	select {
+	case subscribedPostID := <-broker.subscribed:
+		if subscribedPostID != postID {
+			t.Fatalf("subscription postID: got %q, want %q", subscribedPostID, postID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for subscription registration")
+	}
+}
+
+func newTestGraphHandler() (http.Handler, *recordingCommentBroker) {
 	store := memory.NewStore()
 
 	postRepository := memory.NewPostRepository(store)
 	commentRepository := memory.NewCommentRepository(store)
-	commentBroker := subscriptions.NewBroker()
+	commentBroker := newRecordingCommentBroker()
 
 	postService := app.NewPostService(postRepository)
 	commentService := app.NewCommentService(postRepository, commentRepository, commentBroker)
 
-	return graph.NewHandler(postService, commentService, commentBroker)
+	return graph.NewHandler(postService, commentService, commentBroker), commentBroker
 }
 
 func createPost(t *testing.T, baseURL string) string {
