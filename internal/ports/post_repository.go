@@ -16,12 +16,15 @@ type PostRepository interface {
 		ctx context.Context,
 		limit int,
 		cursor *domain.PostCursor,
-	) ([]domain.Post, *domain.PostCursor, error)
+	) ([]domain.PostPreview, *domain.PostCursor, error)
 
 	SetCommentsEnabled(
 		ctx context.Context,
 		postID string,
+		authorID string,
 		enabled bool,
 		updatedAt time.Time,
 	) error
+
+	Delete(ctx context.Context, postID string, authorID string) error
 }

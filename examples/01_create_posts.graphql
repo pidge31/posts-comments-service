@@ -1,0 +1,76 @@
+# Создать пост с открытыми комментариями
+mutation {
+  createPost(input: {
+    authorID: "alice"
+    title: """Тестовый пост с открытыми комментариями"""
+    body: """Этот пост создан для проверки постов с открытыми комментариями."""
+    commentsEnabled: true
+  }) {
+    id
+    title
+    commentsEnabled
+  }
+}
+
+---
+
+# Создать пост с закрытыми комментариями
+mutation {
+  createPost(input: {
+    authorID: "bob"
+    title: """Тестовый пост с закрытыми комментариями"""
+    body: """Этот пост создан для проверки постов с закрытыми комментариями"""
+    commentsEnabled: false
+  }) {
+    id
+    title
+    commentsEnabled
+  }
+}
+
+---
+
+# Тест на максимальную длину заголовка (200 символов) и тела (10 000 символов)
+# Лимиты: MaxPostTitleLength = 200, MaxPostBodyLength = 10000
+# Вставьте заголовок из examples/Long_Title.text
+# Вставьте текст из examples/Long_Text.text
+mutation {
+  createPost(input: {
+    authorID: "alice"
+    title: """Вставьте заголовок на 200 символов"""
+    body: """Вставьте текст на 10000 символов"""
+    commentsEnabled: true
+  }) {
+    id
+    title
+  }
+}
+
+---
+
+# Тест превышения лимита заголовка (ожидаем ошибку)
+# Вставьте заголовок и добавьте символы из examples/Long_Title.text
+mutation {
+  createPost(input: {
+    authorID: "alice"
+    title: """Вставьте заголовок на превышенное количество символов"""
+    body: """Текст поста"""
+    commentsEnabled: true
+  }) {
+    id
+  }
+}
+
+---
+
+# Создать пост для теста пагинации (запустить несколько раз)
+mutation {
+  createPost(input: {
+    authorID: "charlie"
+    title: """Тестовый пост для пагинации"""
+    body: """Этот пост создан для проверки пагинации в списке постов."""
+    commentsEnabled: true
+  }) {
+    id
+  }
+}

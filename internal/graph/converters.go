@@ -24,32 +24,52 @@ func commentToModel(comment domain.Comment) *model.Comment {
 		parentID = &value
 	}
 
+	isDeleted := comment.DeletedAt != nil
+	text := comment.Text
+	authorID := comment.AuthorID
+
+	if isDeleted {
+		text = "[удалено]"
+		authorID = ""
+	}
+
 	return &model.Comment{
 		ID:        comment.ID,
 		PostID:    comment.PostID,
 		ParentID:  parentID,
-		AuthorID:  comment.AuthorID,
-		Text:      comment.Text,
+		AuthorID:  authorID,
+		Text:      text,
 		CreatedAt: comment.CreatedAt,
+		IsDeleted: isDeleted,
 	}
 }
 
-func postsToConnection(posts []domain.Post, hasNextPage bool) *model.PostConnection {
-	edges := make([]*model.PostEdge, 0, len(posts))
+func postPreviewToModel(preview domain.PostPreview) *model.PostPreview {
+	return &model.PostPreview{
+		ID:              preview.ID,
+		AuthorID:        preview.AuthorID,
+		Title:           preview.Title,
+		Excerpt:         preview.Excerpt,
+		CommentsEnabled: preview.CommentsEnabled,
+		CreatedAt:       preview.CreatedAt,
+		UpdatedAt:       preview.UpdatedAt,
+	}
+}
 
-	for _, post := range posts {
-		modelPost := postToModel(post)
+func postPreviewsToConnection(previews []domain.PostPreview, hasNextPage bool) *model.PostPreviewConnection {
+	edges := make([]*model.PostPreviewEdge, 0, len(previews))
 
-		edges = append(edges, &model.PostEdge{
-			Cursor: encodeCursor(post.CreatedAt, post.ID),
-			Node:   modelPost,
+	for _, preview := range previews {
+		edges = append(edges, &model.PostPreviewEdge{
+			Cursor: encodeCursor(preview.CreatedAt, preview.ID),
+			Node:   postPreviewToModel(preview),
 		})
 	}
 
-	return &model.PostConnection{
+	return &model.PostPreviewConnection{
 		Edges: edges,
 		PageInfo: &model.PageInfo{
-			EndCursor:   endCursorFromPostEdges(edges),
+			EndCursor:   endCursorFromPreviewEdges(edges),
 			HasNextPage: hasNextPage,
 		},
 	}
@@ -76,7 +96,7 @@ func commentsToConnection(comments []domain.Comment, hasNextPage bool) *model.Co
 	}
 }
 
-func endCursorFromPostEdges(edges []*model.PostEdge) *string {
+func endCursorFromPreviewEdges(edges []*model.PostPreviewEdge) *string {
 	if len(edges) == 0 {
 		return nil
 	}

@@ -156,6 +156,228 @@ func TestPostgresRepositories(t *testing.T) {
 	}
 }
 
+func TestPostgresDeletePost(t *testing.T) {
+	ctx := context.Background()
+	pool := newPostgresPool(t, ctx)
+
+	postRepository := postgres.NewPostRepository(pool)
+	commentRepository := postgres.NewCommentRepository(pool)
+
+	now := time.Now().UTC()
+	post := domain.Post{
+		ID:              uuid.NewString(),
+		AuthorID:        "author-1",
+		Title:           "Post to delete",
+		Body:            "Body",
+		CommentsEnabled: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	deletePostAfterTest(t, pool, post.ID)
+
+	if err := postRepository.Create(ctx, post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	comment := domain.Comment{
+		ID:        uuid.NewString(),
+		PostID:    post.ID,
+		AuthorID:  "commenter",
+		Text:      "Will be cascade-deleted",
+		CreatedAt: now,
+	}
+	if err := commentRepository.Create(ctx, comment); err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+
+	if err := postRepository.Delete(ctx, post.ID, post.AuthorID); err != nil {
+		t.Fatalf("delete post: %v", err)
+	}
+
+	if _, err := postRepository.GetByID(ctx, post.ID); !errors.Is(err, domain.ErrPostNotFound) {
+		t.Fatalf("expected ErrPostNotFound after delete, got %v", err)
+	}
+
+	if _, err := commentRepository.GetByID(ctx, comment.ID); !errors.Is(err, domain.ErrCommentNotFound) {
+		t.Fatalf("expected comment to be cascade-deleted, got %v", err)
+	}
+}
+
+func TestPostgresDeletePost_Forbidden(t *testing.T) {
+	ctx := context.Background()
+	pool := newPostgresPool(t, ctx)
+
+	postRepository := postgres.NewPostRepository(pool)
+
+	now := time.Now().UTC()
+	post := domain.Post{
+		ID:        uuid.NewString(),
+		AuthorID:  "author-1",
+		Title:     "Post",
+		Body:      "Body",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	deletePostAfterTest(t, pool, post.ID)
+
+	if err := postRepository.Create(ctx, post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := postRepository.Delete(ctx, post.ID, "wrong-author"); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+
+	if err := postRepository.Delete(ctx, uuid.NewString(), "author-1"); !errors.Is(err, domain.ErrPostNotFound) {
+		t.Fatalf("expected ErrPostNotFound for missing post, got %v", err)
+	}
+}
+
+func TestPostgresDeleteComment(t *testing.T) {
+	ctx := context.Background()
+	pool := newPostgresPool(t, ctx)
+
+	postRepository := postgres.NewPostRepository(pool)
+	commentRepository := postgres.NewCommentRepository(pool)
+
+	now := time.Now().UTC()
+	post := domain.Post{
+		ID:              uuid.NewString(),
+		AuthorID:        "author-1",
+		Title:           "Post",
+		Body:            "Body",
+		CommentsEnabled: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	deletePostAfterTest(t, pool, post.ID)
+
+	if err := postRepository.Create(ctx, post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	comment := domain.Comment{
+		ID:        uuid.NewString(),
+		PostID:    post.ID,
+		AuthorID:  "commenter",
+		Text:      "To be soft-deleted",
+		CreatedAt: now,
+	}
+	if err := commentRepository.Create(ctx, comment); err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+
+	deletedAt := time.Now().UTC()
+	if err := commentRepository.Delete(ctx, comment.ID, comment.AuthorID, deletedAt); err != nil {
+		t.Fatalf("delete comment: %v", err)
+	}
+
+	got, err := commentRepository.GetByID(ctx, comment.ID)
+	if err != nil {
+		t.Fatalf("get deleted comment: %v", err)
+	}
+	if got.DeletedAt == nil {
+		t.Fatal("expected DeletedAt to be set")
+	}
+
+	comments, _, err := commentRepository.ListByPostAndParent(ctx, post.ID, nil, 10, nil)
+	if err != nil {
+		t.Fatalf("list comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected soft-deleted comment to remain as placeholder, got %d", len(comments))
+	}
+	if comments[0].DeletedAt == nil {
+		t.Fatal("expected listed comment to have DeletedAt set")
+	}
+}
+
+func TestPostgresDeleteComment_Forbidden(t *testing.T) {
+	ctx := context.Background()
+	pool := newPostgresPool(t, ctx)
+
+	postRepository := postgres.NewPostRepository(pool)
+	commentRepository := postgres.NewCommentRepository(pool)
+
+	now := time.Now().UTC()
+	post := domain.Post{
+		ID:              uuid.NewString(),
+		AuthorID:        "author-1",
+		Title:           "Post",
+		Body:            "Body",
+		CommentsEnabled: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	deletePostAfterTest(t, pool, post.ID)
+
+	if err := postRepository.Create(ctx, post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	comment := domain.Comment{
+		ID:        uuid.NewString(),
+		PostID:    post.ID,
+		AuthorID:  "commenter",
+		Text:      "Comment",
+		CreatedAt: now,
+	}
+	if err := commentRepository.Create(ctx, comment); err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+
+	if err := commentRepository.Delete(ctx, comment.ID, "wrong-author", now); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("wrong author: expected ErrForbidden, got %v", err)
+	}
+
+	if err := commentRepository.Delete(ctx, uuid.NewString(), "commenter", now); !errors.Is(err, domain.ErrCommentNotFound) {
+		t.Fatalf("missing comment: expected ErrCommentNotFound, got %v", err)
+	}
+}
+
+func TestPostgresDeleteComment_AlreadyDeleted(t *testing.T) {
+	ctx := context.Background()
+	pool := newPostgresPool(t, ctx)
+
+	postRepository := postgres.NewPostRepository(pool)
+	commentRepository := postgres.NewCommentRepository(pool)
+
+	now := time.Now().UTC()
+	post := domain.Post{
+		ID:              uuid.NewString(),
+		AuthorID:        "author-1",
+		Title:           "Post",
+		Body:            "Body",
+		CommentsEnabled: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	deletePostAfterTest(t, pool, post.ID)
+
+	if err := postRepository.Create(ctx, post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	comment := domain.Comment{
+		ID:        uuid.NewString(),
+		PostID:    post.ID,
+		AuthorID:  "commenter",
+		Text:      "Comment",
+		CreatedAt: now,
+	}
+	if err := commentRepository.Create(ctx, comment); err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+
+	if err := commentRepository.Delete(ctx, comment.ID, comment.AuthorID, now); err != nil {
+		t.Fatalf("first delete: %v", err)
+	}
+
+	if err := commentRepository.Delete(ctx, comment.ID, comment.AuthorID, now); !errors.Is(err, domain.ErrCommentNotFound) {
+		t.Fatalf("second delete: expected ErrCommentNotFound, got %v", err)
+	}
+}
+
 func TestPostgresRepositoryErrors(t *testing.T) {
 	ctx := context.Background()
 	pool := newPostgresPool(t, ctx)
@@ -212,6 +434,7 @@ func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	for _, migration := range []string{
 		"001_create_posts.up.sql",
 		"002_create_comments.up.sql",
+		"003_add_comment_soft_delete.up.sql",
 	} {
 		path := filepath.Join("..", "..", "migrations", migration)
 		query, err := os.ReadFile(path)
@@ -236,7 +459,7 @@ func deletePostAfterTest(t *testing.T, pool *pgxpool.Pool, postID string) {
 	})
 }
 
-func postIDs(posts []domain.Post) []string {
+func postIDs(posts []domain.PostPreview) []string {
 	ids := make([]string, 0, len(posts))
 	for _, post := range posts {
 		ids = append(ids, post.ID)
@@ -244,7 +467,7 @@ func postIDs(posts []domain.Post) []string {
 	return ids
 }
 
-func containsPostID(posts []domain.Post, id string) bool {
+func containsPostID(posts []domain.PostPreview, id string) bool {
 	for _, post := range posts {
 		if post.ID == id {
 			return true

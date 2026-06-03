@@ -135,6 +135,30 @@ func TestPostService_SetCommentsEnabled_Forbidden(t *testing.T) {
 	}
 }
 
+func TestPostService_DeletePost(t *testing.T) {
+	postService, _ := newTestServices()
+	post := createTestPost(t, postService)
+
+	if err := postService.DeletePost(context.Background(), post.ID, post.AuthorID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	_, err := postService.GetPost(context.Background(), post.ID)
+	if !errors.Is(err, domain.ErrPostNotFound) {
+		t.Fatalf("expected ErrPostNotFound after delete, got %v", err)
+	}
+}
+
+func TestPostService_DeletePost_Forbidden(t *testing.T) {
+	postService, _ := newTestServices()
+	post := createTestPost(t, postService)
+
+	err := postService.DeletePost(context.Background(), post.ID, "another-author")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
 func newTestServices() (*app.PostService, *app.CommentService) {
 	store := memory.NewStore()
 

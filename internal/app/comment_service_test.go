@@ -346,6 +346,83 @@ func TestCommentService_ListComments_UsesDefaultAndMaxLimit(t *testing.T) {
 	}
 }
 
+func TestCommentService_DeleteComment(t *testing.T) {
+	postService, commentService := newTestServices()
+	post := createTestPost(t, postService)
+
+	comment, err := commentService.AddComment(context.Background(), app.AddCommentInput{
+		PostID:   post.ID,
+		AuthorID: "user-1",
+		Text:     "To be deleted",
+	})
+	if err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	if err := commentService.DeleteComment(context.Background(), comment.ID, "user-1"); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// comment stays in list but is masked
+	comments, _, err := commentService.ListComments(context.Background(), post.ID, nil, 10, nil)
+	if err != nil {
+		t.Fatalf("list comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected comment to remain as placeholder, got %d comments", len(comments))
+	}
+	if comments[0].DeletedAt == nil {
+		t.Fatal("expected DeletedAt to be set")
+	}
+}
+
+func TestCommentService_DeleteComment_Forbidden(t *testing.T) {
+	postService, commentService := newTestServices()
+	post := createTestPost(t, postService)
+
+	comment, err := commentService.AddComment(context.Background(), app.AddCommentInput{
+		PostID:   post.ID,
+		AuthorID: "user-1",
+		Text:     "Comment",
+	})
+	if err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	err = commentService.DeleteComment(context.Background(), comment.ID, "other-user")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestCommentService_CannotReplyToDeletedComment(t *testing.T) {
+	postService, commentService := newTestServices()
+	post := createTestPost(t, postService)
+
+	parent, err := commentService.AddComment(context.Background(), app.AddCommentInput{
+		PostID:   post.ID,
+		AuthorID: "user-1",
+		Text:     "Parent",
+	})
+	if err != nil {
+		t.Fatalf("add parent: %v", err)
+	}
+
+	if err := commentService.DeleteComment(context.Background(), parent.ID, "user-1"); err != nil {
+		t.Fatalf("delete parent: %v", err)
+	}
+
+	_, err = commentService.AddComment(context.Background(), app.AddCommentInput{
+		PostID:   post.ID,
+		ParentID: &parent.ID,
+		AuthorID: "user-2",
+		Text:     "Reply to deleted",
+	})
+	if !errors.Is(err, domain.ErrCommentNotFound) {
+		t.Fatalf("expected ErrCommentNotFound, got %v", err)
+	}
+}
+
 func createRootComments(t *testing.T, commentService *app.CommentService, postID string, count int) {
 	t.Helper()
 

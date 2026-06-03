@@ -12,26 +12,38 @@ const subscriberBufferSize = 16
 type Broker struct {
 	mu sync.RWMutex
 
-	subscribers map[string]map[chan domain.Comment]struct{}
+	// inner map: channel → once-safe closer (removes from map + closes channel)
+	subscribers map[string]map[chan domain.Comment]func()
 }
 
 func NewBroker() *Broker {
 	return &Broker{
-		subscribers: make(map[string]map[chan domain.Comment]struct{}),
+		subscribers: make(map[string]map[chan domain.Comment]func()),
 	}
 }
 
 func (b *Broker) PublishCommentCreated(ctx context.Context, comment domain.Comment) error {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
 
-	for subscriber := range b.subscribers[comment.PostID] {
+	var slowClosers []func()
+
+	for ch, closer := range b.subscribers[comment.PostID] {
 		select {
-		case subscriber <- comment:
+		case ch <- comment:
 		case <-ctx.Done():
+			b.mu.RUnlock()
 			return ctx.Err()
 		default:
+			// subscriber is too slow — collect its closer, do not block
+			slowClosers = append(slowClosers, closer)
 		}
+	}
+
+	b.mu.RUnlock()
+
+	// close slow subscribers outside the read lock to avoid lock inversion
+	for _, closer := range slowClosers {
+		closer()
 	}
 
 	return nil
@@ -43,27 +55,17 @@ func (b *Broker) SubscribeToPostComments(
 ) (<-chan domain.Comment, func(), error) {
 	ch := make(chan domain.Comment, subscriberBufferSize)
 
-	b.mu.Lock()
-
-	if b.subscribers[postID] == nil {
-		b.subscribers[postID] = make(map[chan domain.Comment]struct{})
-	}
-
-	b.subscribers[postID][ch] = struct{}{}
-
-	b.mu.Unlock()
-
 	var once sync.Once
 
-	unsubscribe := func() {
+	closer := func() {
 		once.Do(func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 
-			if subscribers, ok := b.subscribers[postID]; ok {
-				delete(subscribers, ch)
+			if subs, ok := b.subscribers[postID]; ok {
+				delete(subs, ch)
 
-				if len(subscribers) == 0 {
+				if len(subs) == 0 {
 					delete(b.subscribers, postID)
 				}
 			}
@@ -72,10 +74,20 @@ func (b *Broker) SubscribeToPostComments(
 		})
 	}
 
+	b.mu.Lock()
+
+	if b.subscribers[postID] == nil {
+		b.subscribers[postID] = make(map[chan domain.Comment]func())
+	}
+
+	b.subscribers[postID][ch] = closer
+
+	b.mu.Unlock()
+
 	go func() {
 		<-ctx.Done()
-		unsubscribe()
+		closer()
 	}()
 
-	return ch, unsubscribe, nil
+	return ch, closer, nil
 }

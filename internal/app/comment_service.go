@@ -79,17 +79,6 @@ func (s *CommentService) AddComment(ctx context.Context, input AddCommentInput) 
 
 	parentID := normalizeOptionalID(input.ParentID)
 
-	if parentID != nil {
-		parentComment, err := s.commentRepository.GetByID(ctx, *parentID)
-		if err != nil {
-			return nil, err
-		}
-
-		if parentComment.PostID != postID {
-			return nil, domain.ErrInvalidParentComment
-		}
-	}
-
 	comment := domain.Comment{
 		ID:        uuid.NewString(),
 		PostID:    postID,
@@ -108,6 +97,17 @@ func (s *CommentService) AddComment(ctx context.Context, input AddCommentInput) 
 	}
 
 	return &comment, nil
+}
+
+func (s *CommentService) DeleteComment(ctx context.Context, commentID string, authorID string) error {
+	commentID = strings.TrimSpace(commentID)
+	authorID = strings.TrimSpace(authorID)
+
+	if commentID == "" || authorID == "" {
+		return domain.ErrInvalidInput
+	}
+
+	return s.commentRepository.Delete(ctx, commentID, authorID, time.Now().UTC())
 }
 
 func (s *CommentService) GetComment(ctx context.Context, id string) (*domain.Comment, error) {

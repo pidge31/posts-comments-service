@@ -87,9 +87,9 @@ func (r *PostRepository) List(
 	ctx context.Context,
 	limit int,
 	cursor *domain.PostCursor,
-) ([]domain.Post, *domain.PostCursor, error) {
+) ([]domain.PostPreview, *domain.PostCursor, error) {
 	if limit <= 0 {
-		return []domain.Post{}, nil, nil
+		return []domain.PostPreview{}, nil, nil
 	}
 
 	var cursorCreatedAt any
@@ -107,7 +107,7 @@ func (r *PostRepository) List(
 			id::text,
 			author_id,
 			title,
-			body,
+			SUBSTRING(body, 1, $3),
 			comments_enabled,
 			created_at,
 			updated_at
@@ -117,10 +117,11 @@ func (r *PostRepository) List(
 			OR (created_at, id) < ($1::timestamptz, $2::uuid)
 		)
 		ORDER BY created_at DESC, id DESC
-		LIMIT $3
+		LIMIT $4
 		`,
 		cursorCreatedAt,
 		cursorID,
+		domain.PostExcerptLength+1,
 		limit+1,
 	)
 	if err != nil {
@@ -128,24 +129,26 @@ func (r *PostRepository) List(
 	}
 	defer rows.Close()
 
-	posts := make([]domain.Post, 0, limit+1)
+	previews := make([]domain.PostPreview, 0, limit+1)
 
 	for rows.Next() {
-		var post domain.Post
+		var preview domain.PostPreview
+		var rawExcerpt string
 
 		if err := rows.Scan(
-			&post.ID,
-			&post.AuthorID,
-			&post.Title,
-			&post.Body,
-			&post.CommentsEnabled,
-			&post.CreatedAt,
-			&post.UpdatedAt,
+			&preview.ID,
+			&preview.AuthorID,
+			&preview.Title,
+			&rawExcerpt,
+			&preview.CommentsEnabled,
+			&preview.CreatedAt,
+			&preview.UpdatedAt,
 		); err != nil {
 			return nil, nil, mapPostgresError(err)
 		}
 
-		posts = append(posts, post)
+		preview.Excerpt = domain.MakePostExcerpt(rawExcerpt)
+		previews = append(previews, preview)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -153,26 +156,49 @@ func (r *PostRepository) List(
 	}
 
 	var nextCursor *domain.PostCursor
-	if len(posts) > limit {
-		lastPost := posts[limit-1]
+	if len(previews) > limit {
+		last := previews[limit-1]
 		nextCursor = &domain.PostCursor{
-			CreatedAt: lastPost.CreatedAt,
-			ID:        lastPost.ID,
+			CreatedAt: last.CreatedAt,
+			ID:        last.ID,
 		}
 
-		posts = posts[:limit]
+		previews = previews[:limit]
 	}
 
-	return posts, nextCursor, nil
+	return previews, nextCursor, nil
+}
+
+func (r *PostRepository) Delete(ctx context.Context, postID string, authorID string) error {
+	tag, err := r.pool.Exec(
+		ctx,
+		`DELETE FROM posts WHERE id = $1::uuid AND author_id = $2`,
+		postID,
+		authorID,
+	)
+	if err != nil {
+		return mapPostgresError(err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		if _, err := r.GetByID(ctx, postID); err != nil {
+			return err
+		}
+
+		return domain.ErrForbidden
+	}
+
+	return nil
 }
 
 func (r *PostRepository) SetCommentsEnabled(
 	ctx context.Context,
 	postID string,
+	authorID string,
 	enabled bool,
 	updatedAt time.Time,
 ) error {
-	commandTag, err := r.pool.Exec(
+	tag, err := r.pool.Exec(
 		ctx,
 		`
 		UPDATE posts
@@ -180,17 +206,23 @@ func (r *PostRepository) SetCommentsEnabled(
 			comments_enabled = $1,
 			updated_at = $2
 		WHERE id = $3::uuid
+		  AND author_id = $4
 		`,
 		enabled,
 		updatedAt,
 		postID,
+		authorID,
 	)
 	if err != nil {
 		return mapPostgresError(err)
 	}
 
-	if commandTag.RowsAffected() == 0 {
-		return domain.ErrPostNotFound
+	if tag.RowsAffected() == 0 {
+		if _, err := r.GetByID(ctx, postID); err != nil {
+			return err
+		}
+
+		return domain.ErrForbidden
 	}
 
 	return nil

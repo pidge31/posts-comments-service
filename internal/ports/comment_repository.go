@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/pidge31/posts-comments-service/internal/domain"
 )
@@ -10,6 +11,8 @@ type CommentRepository interface {
 	Create(ctx context.Context, comment domain.Comment) error
 
 	GetByID(ctx context.Context, id string) (*domain.Comment, error)
+
+	Delete(ctx context.Context, commentID string, authorID string, deletedAt time.Time) error
 
 	ListByPostAndParent(
 		ctx context.Context,

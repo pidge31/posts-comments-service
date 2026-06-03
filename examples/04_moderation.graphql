@@ -1,0 +1,56 @@
+# Закрыть комментарии к посту (настраивает только автор поста)
+mutation {
+  setPostCommentsEnabled(
+    postID: "POST_ID"
+    authorID: "alice"
+    enabled: false
+  ) {
+    id
+    commentsEnabled
+    updatedAt
+  }
+}
+
+---
+
+# Открыть комментарии обратно (настраивает только автор поста)
+mutation {
+  setPostCommentsEnabled(
+    postID: "POST_ID"
+    authorID: "alice"
+    enabled: true
+  ) {
+    id
+    commentsEnabled
+  }
+}
+
+---
+
+# Удалить комментарий (мягкое удаление, только автор комментария)
+mutation {
+  deleteComment(
+    commentID: "COMMENT_ID"
+    authorID: "alice"
+  )
+}
+
+---
+
+# Попытка удалить чужой комментарий (ожидаем ошибку: только автор комментария может удалить его)
+mutation {
+  deleteComment(
+    commentID: "COMMENT_ID"
+    authorID: "wrong_user"
+  )
+}
+
+---
+
+# Удалить пост (только автор)
+mutation {
+  deletePost(
+    postID: "POST_ID"
+    authorID: "alice"
+  )
+}

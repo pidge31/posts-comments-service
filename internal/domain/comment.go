@@ -11,4 +11,5 @@ type Comment struct {
 	AuthorID  string
 	Text      string
 	CreatedAt time.Time
+	DeletedAt *time.Time
 }

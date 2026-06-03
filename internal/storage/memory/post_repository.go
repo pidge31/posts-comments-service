@@ -58,13 +58,13 @@ func (r *PostRepository) List(
 	ctx context.Context,
 	limit int,
 	cursor *domain.PostCursor,
-) ([]domain.Post, *domain.PostCursor, error) {
+) ([]domain.PostPreview, *domain.PostCursor, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 
 	if limit <= 0 {
-		return []domain.Post{}, nil, nil
+		return []domain.PostPreview{}, nil, nil
 	}
 
 	posts := r.listPosts()
@@ -100,12 +100,18 @@ func (r *PostRepository) List(
 		page = page[:limit]
 	}
 
-	return page, nextCursor, nil
+	previews := make([]domain.PostPreview, 0, len(page))
+	for _, post := range page {
+		previews = append(previews, domain.NewPostPreview(post))
+	}
+
+	return previews, nextCursor, nil
 }
 
 func (r *PostRepository) SetCommentsEnabled(
 	ctx context.Context,
 	postID string,
+	authorID string,
 	enabled bool,
 	updatedAt time.Time,
 ) error {
@@ -121,10 +127,46 @@ func (r *PostRepository) SetCommentsEnabled(
 		return domain.ErrPostNotFound
 	}
 
+	if post.AuthorID != authorID {
+		return domain.ErrForbidden
+	}
+
 	post.CommentsEnabled = enabled
 	post.UpdatedAt = updatedAt
 
 	r.store.posts[postID] = post
+
+	return nil
+}
+
+func (r *PostRepository) Delete(ctx context.Context, postID string, authorID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	r.store.mu.Lock()
+	defer r.store.mu.Unlock()
+
+	post, ok := r.store.posts[postID]
+	if !ok {
+		return domain.ErrPostNotFound
+	}
+
+	if post.AuthorID != authorID {
+		return domain.ErrForbidden
+	}
+
+	// cascade: remove all comments and index entries for this post
+	for key, entries := range r.store.commentsByParent {
+		if key.postID == postID {
+			for _, entry := range entries {
+				delete(r.store.comments, entry.ID)
+			}
+			delete(r.store.commentsByParent, key)
+		}
+	}
+
+	delete(r.store.posts, postID)
 
 	return nil
 }

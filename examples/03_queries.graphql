@@ -1,0 +1,131 @@
+# Список постов (первые 10)
+query {
+  posts(first: 10) {
+    edges {
+      cursor
+      node {
+        id
+        authorID
+        title
+        excerpt
+        commentsEnabled
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+
+---
+
+# Следующая страница постов (вставьте cursor из предыдущего запроса)
+query {
+  posts(first: 10, after: "CURSOR_FROM_PREVIOUS_RESPONSE") {
+    edges {
+      node { id title }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+
+---
+
+# Получить пост с комментариями первого уровня
+query {
+  post(id: "POST_ID") {
+    id
+    title
+    body
+    authorID
+    commentsEnabled
+    createdAt
+    comments(first: 20) {
+      edges {
+        cursor
+        node {
+          id
+          authorID
+          text
+          isDeleted
+          createdAt
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+
+---
+
+# Получить ответы конкретного комментария (любой уровень вложенности)
+# Шаг 1: загружаем пост и видим комментарии 1 уровня, берём id нужного комментария
+# Шаг 2: вставляем id в этот запрос видим его ответы (2 уровень)
+# Шаг 3: из ответов берём id нужного, вставляем сюда и видим 3 уровень, и т.д.
+query {
+  comment(id: "COMMENT_ID") {
+    id
+    authorID
+    text
+    isDeleted
+    createdAt
+    replies(first: 5) {
+      edges {
+        node {
+          id
+          authorID
+          text
+          isDeleted
+          createdAt
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+
+---
+
+# Получить пост с комментариями и ответами (два уровня)
+query {
+  post(id: "POST_ID") {
+    id
+    title
+    body
+    authorID
+    commentsEnabled
+    createdAt
+    comments(first: 10) {
+      edges {
+        node {
+          id
+          authorID
+          text
+          isDeleted
+          replies(first: 5) {
+            edges {
+              node {
+                id
+                authorID
+                text
+                isDeleted
+              }
+            }
+            pageInfo { hasNextPage }
+          }
+        }
+      }
+    }
+  }
+}

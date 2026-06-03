@@ -52,6 +52,15 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePos
 	return postToModel(*post), nil
 }
 
+// DeletePost is the resolver for the deletePost field.
+func (r *mutationResolver) DeletePost(ctx context.Context, postID string, authorID string) (bool, error) {
+	if err := r.postService.DeletePost(ctx, postID, authorID); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // AddComment is the resolver for the addComment field.
 func (r *mutationResolver) AddComment(ctx context.Context, input model.AddCommentInput) (*model.Comment, error) {
 	comment, err := r.commentService.AddComment(ctx, app.AddCommentInput{
@@ -65,6 +74,15 @@ func (r *mutationResolver) AddComment(ctx context.Context, input model.AddCommen
 	}
 
 	return commentToModel(*comment), nil
+}
+
+// DeleteComment is the resolver for the deleteComment field.
+func (r *mutationResolver) DeleteComment(ctx context.Context, commentID string, authorID string) (bool, error) {
+	if err := r.commentService.DeleteComment(ctx, commentID, authorID); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // SetPostCommentsEnabled is the resolver for the setPostCommentsEnabled field.
@@ -101,18 +119,18 @@ func (r *postResolver) Comments(ctx context.Context, obj *model.Post, first *int
 }
 
 // Posts is the resolver for the posts field.
-func (r *queryResolver) Posts(ctx context.Context, first *int, after *string) (*model.PostConnection, error) {
+func (r *queryResolver) Posts(ctx context.Context, first *int, after *string) (*model.PostPreviewConnection, error) {
 	cursor, err := decodePostCursor(after)
 	if err != nil {
 		return nil, err
 	}
 
-	posts, nextCursor, err := r.postService.ListPosts(ctx, limitFromPointer(first), cursor)
+	previews, nextCursor, err := r.postService.ListPosts(ctx, limitFromPointer(first), cursor)
 	if err != nil {
 		return nil, err
 	}
 
-	return postsToConnection(posts, nextCursor != nil), nil
+	return postPreviewsToConnection(previews, nextCursor != nil), nil
 }
 
 // Post is the resolver for the post field.
@@ -123,6 +141,16 @@ func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error
 	}
 
 	return postToModel(*post), nil
+}
+
+// Comment is the resolver for the comment field.
+func (r *queryResolver) Comment(ctx context.Context, id string) (*model.Comment, error) {
+	comment, err := r.commentService.GetComment(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return commentToModel(*comment), nil
 }
 
 // CommentAdded is the resolver for the commentAdded field.

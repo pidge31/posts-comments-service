@@ -1,0 +1,14 @@
+# Подписка на новые комментарии к посту
+# Вставьте в GraphQL Playground и нажмите ▶
+# Затем в другой вкладке Playground добавьте комментарий (02_add_comments.graphql)
+# комментарий появится в реальном времени
+
+subscription {
+  commentAdded(postID: "POST_ID") {
+    id
+    authorID
+    text
+    parentID
+    createdAt
+  }
+}

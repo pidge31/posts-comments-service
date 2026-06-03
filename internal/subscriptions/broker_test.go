@@ -77,12 +77,12 @@ func TestBroker_SlowSubscriberDoesNotBlockPublisher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	comments, unsubscribe, err := broker.SubscribeToPostComments(ctx, "post-1")
+	comments, _, err := broker.SubscribeToPostComments(ctx, "post-1")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	defer unsubscribe()
 
+	// publish more than the channel buffer can hold
 	for i := 0; i < 32; i++ {
 		err := broker.PublishCommentCreated(context.Background(), domain.Comment{
 			ID:     "comment",
@@ -93,10 +93,46 @@ func TestBroker_SlowSubscriberDoesNotBlockPublisher(t *testing.T) {
 		}
 	}
 
+	// channel should still be readable (buffered items or closed)
 	select {
 	case <-comments:
 	case <-time.After(time.Second):
-		t.Fatal("expected at least one queued comment")
+		t.Fatal("publisher appears to have blocked")
+	}
+}
+
+func TestBroker_SlowSubscriberChannelClosedOnOverflow(t *testing.T) {
+	broker := subscriptions.NewBroker()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	comments, _, err := broker.SubscribeToPostComments(ctx, "post-1")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	// publish more than the channel buffer — triggers overflow and close
+	for i := 0; i < 32; i++ {
+		if err := broker.PublishCommentCreated(context.Background(), domain.Comment{
+			ID:     "comment",
+			PostID: "post-1",
+		}); err != nil {
+			t.Fatalf("publish comment %d: %v", i, err)
+		}
+	}
+
+	// drain buffered comments until channel closes
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case _, ok := <-comments:
+			if !ok {
+				return // channel was closed — expected behavior
+			}
+		case <-deadline:
+			t.Fatal("timed out: subscriber channel was not closed after overflow")
+		}
 	}
 }
 

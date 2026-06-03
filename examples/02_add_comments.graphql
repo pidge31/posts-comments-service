@@ -1,0 +1,72 @@
+# Добавить корневой комментарий
+# Замените POST_ID на реальный id поста
+mutation {
+  addComment(input: {
+    postID: "POST_ID"
+    authorID: "alice"
+    text: """Отличная статья!"""
+  }) {
+    id
+    text
+    authorID
+  }
+}
+
+---
+
+# Добавить ответ на комментарий
+# Замените POST_ID и PARENT_COMMENT_ID на реальные значения
+mutation {
+  addComment(input: {
+    postID: "POST_ID"
+    parentID: "PARENT_COMMENT_ID"
+    authorID: "bob"
+    text: """Полностью согласен с вами!"""
+  }) {
+    id
+    parentID
+    text
+  }
+}
+
+---
+
+# Тест на максимальную длину комментария (2000 символов)
+# Вставьте текст из examples/Long_Commen.text
+mutation {
+  addComment(input: {
+    postID: "POST_ID"
+    authorID: "charlie"
+    text: """Вставьте текст на 2000 символов"""
+  }) {
+    id
+    text
+  }
+}
+
+---
+
+# Тест превышения лимита (ожидаем ошибку)
+# Вставьте текст и добавьте символов для превышения лимита из examples/Long_Commen.text
+mutation {
+  addComment(input: {
+    postID: "POST_ID"
+    authorID: "charlie"
+    text: """Вставьте текст на превышение лимита комментария"""
+  }) {
+    id
+  }
+}
+
+---
+
+# Попытка добавить комментарий к посту с закрытыми комментариями (ожидаем ошибку)
+mutation {
+  addComment(input: {
+    postID: "POST_ID_WITH_COMMENTS_DISABLED"
+    authorID: "alice"
+    text: """Этот комментарий не должен сохраниться"""
+  }) {
+    id
+  }
+}

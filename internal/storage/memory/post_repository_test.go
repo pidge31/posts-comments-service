@@ -1,4 +1,4 @@
-package memory
+package memory_test
 
 import (
 	"context"
@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/pidge31/posts-comments-service/internal/domain"
+	"github.com/pidge31/posts-comments-service/internal/storage/memory"
 )
 
 func TestPostRepositoryCreateRejectsDuplicateID(t *testing.T) {
 	t.Parallel()
 
-	repo := NewPostRepository(NewStore())
+	repo := memory.NewPostRepository(memory.NewStore())
 	post := domain.Post{
 		ID:              "post-1",
 		AuthorID:        "author-1",
@@ -35,7 +36,7 @@ func TestPostRepositoryCreateRejectsDuplicateID(t *testing.T) {
 func TestPostRepositoryListUsesStableCursorOrder(t *testing.T) {
 	t.Parallel()
 
-	repo := NewPostRepository(NewStore())
+	repo := memory.NewPostRepository(memory.NewStore())
 	baseTime := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 
 	posts := []domain.Post{
@@ -75,7 +76,7 @@ func TestPostRepositoryListUsesStableCursorOrder(t *testing.T) {
 func TestPostRepositoryRespectsCanceledContext(t *testing.T) {
 	t.Parallel()
 
-	repo := NewPostRepository(NewStore())
+	repo := memory.NewPostRepository(memory.NewStore())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -88,7 +89,7 @@ func TestPostRepositoryRespectsCanceledContext(t *testing.T) {
 func TestPostRepositorySetCommentsEnabled(t *testing.T) {
 	t.Parallel()
 
-	repo := NewPostRepository(NewStore())
+	repo := memory.NewPostRepository(memory.NewStore())
 	post := domain.Post{
 		ID:              "post-1",
 		AuthorID:        "author-1",
@@ -99,7 +100,7 @@ func TestPostRepositorySetCommentsEnabled(t *testing.T) {
 		t.Fatalf("create post: %v", err)
 	}
 
-	if err := repo.SetCommentsEnabled(context.Background(), "post-1", false, time.Now()); err != nil {
+	if err := repo.SetCommentsEnabled(context.Background(), "post-1", "author-1", false, time.Now()); err != nil {
 		t.Fatalf("update comments enabled: %v", err)
 	}
 
@@ -113,7 +114,27 @@ func TestPostRepositorySetCommentsEnabled(t *testing.T) {
 	}
 }
 
-func assertPostIDs(t *testing.T, posts []domain.Post, want []string) {
+func TestPostRepositorySetCommentsEnabledForbidden(t *testing.T) {
+	t.Parallel()
+
+	repo := memory.NewPostRepository(memory.NewStore())
+	post := domain.Post{
+		ID:              "post-1",
+		AuthorID:        "author-1",
+		CommentsEnabled: true,
+	}
+
+	if err := repo.Create(context.Background(), post); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	err := repo.SetCommentsEnabled(context.Background(), "post-1", "other-author", false, time.Now())
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("wrong author: got %v, want %v", err, domain.ErrForbidden)
+	}
+}
+
+func assertPostIDs(t *testing.T, posts []domain.PostPreview, want []string) {
 	t.Helper()
 
 	if len(posts) != len(want) {

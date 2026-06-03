@@ -20,6 +20,7 @@ type Comment struct {
 	AuthorID  string             `json:"authorID"`
 	Text      string             `json:"text"`
 	CreatedAt time.Time          `json:"createdAt"`
+	IsDeleted bool               `json:"isDeleted"`
 	Replies   *CommentConnection `json:"replies"`
 }
 
@@ -67,6 +68,26 @@ type PostConnection struct {
 type PostEdge struct {
 	Cursor string `json:"cursor"`
 	Node   *Post  `json:"node"`
+}
+
+type PostPreview struct {
+	ID              string    `json:"id"`
+	AuthorID        string    `json:"authorID"`
+	Title           string    `json:"title"`
+	Excerpt         string    `json:"excerpt"`
+	CommentsEnabled bool      `json:"commentsEnabled"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type PostPreviewConnection struct {
+	Edges    []*PostPreviewEdge `json:"edges"`
+	PageInfo *PageInfo          `json:"pageInfo"`
+}
+
+type PostPreviewEdge struct {
+	Cursor string       `json:"cursor"`
+	Node   *PostPreview `json:"node"`
 }
 
 type Query struct {

@@ -78,10 +78,21 @@ func (s *PostService) ListPosts(
 	ctx context.Context,
 	limit int,
 	cursor *domain.PostCursor,
-) ([]domain.Post, *domain.PostCursor, error) {
+) ([]domain.PostPreview, *domain.PostCursor, error) {
 	limit = normalizePageLimit(limit)
 
 	return s.postRepository.List(ctx, limit, cursor)
+}
+
+func (s *PostService) DeletePost(ctx context.Context, postID string, authorID string) error {
+	postID = strings.TrimSpace(postID)
+	authorID = strings.TrimSpace(authorID)
+
+	if postID == "" || authorID == "" {
+		return domain.ErrInvalidInput
+	}
+
+	return s.postRepository.Delete(ctx, postID, authorID)
 }
 
 func (s *PostService) SetCommentsEnabled(
@@ -97,18 +108,7 @@ func (s *PostService) SetCommentsEnabled(
 		return nil, domain.ErrInvalidInput
 	}
 
-	updatedAt := time.Now().UTC()
-
-	post, err := s.postRepository.GetByID(ctx, postID)
-	if err != nil {
-		return nil, err
-	}
-
-	if post.AuthorID != authorID {
-		return nil, domain.ErrForbidden
-	}
-
-	if err := s.postRepository.SetCommentsEnabled(ctx, postID, enabled, updatedAt); err != nil {
+	if err := s.postRepository.SetCommentsEnabled(ctx, postID, authorID, enabled, time.Now().UTC()); err != nil {
 		return nil, err
 	}
 

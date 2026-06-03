@@ -14,6 +14,26 @@ type Post {
   comments(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
 }
 
+type PostPreview {
+  id: ID!
+  authorID: String!
+  title: String!
+  excerpt: String!
+  commentsEnabled: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type PostPreviewEdge {
+  cursor: String!
+  node: PostPreview!
+}
+
+type PostPreviewConnection {
+  edges: [PostPreviewEdge!]!
+  pageInfo: PageInfo!
+}
+
 type Comment {
   id: ID!
   postID: ID!
@@ -21,6 +41,7 @@ type Comment {
   authorID: String!
   text: String!
   createdAt: Time!
+  isDeleted: Boolean!
 
   replies(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
 }
@@ -65,13 +86,16 @@ input AddCommentInput {
 }
 
 type Query {
-  posts(first: Int, after: String): PostConnection!
+  posts(first: Int, after: String): PostPreviewConnection!
   post(id: ID!): Post
+  comment(id: ID!): Comment
 }
 
 type Mutation {
   createPost(input: CreatePostInput!): Post!
+  deletePost(postID: ID!, authorID: String!): Boolean!
   addComment(input: AddCommentInput!): Comment!
+  deleteComment(commentID: ID!, authorID: String!): Boolean!
   setPostCommentsEnabled(postID: ID!, authorID: String!, enabled: Boolean!): Post!
 }
 

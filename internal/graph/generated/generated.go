@@ -44,6 +44,7 @@ type ComplexityRoot struct {
 		AuthorID  func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
+		IsDeleted func(childComplexity int) int
 		ParentID  func(childComplexity int) int
 		PostID    func(childComplexity int) int
 		Replies   func(childComplexity int, first *int, after *string) int
@@ -63,6 +64,8 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AddComment             func(childComplexity int, input model.AddCommentInput) int
 		CreatePost             func(childComplexity int, input model.CreatePostInput) int
+		DeleteComment          func(childComplexity int, commentID string, authorID string) int
+		DeletePost             func(childComplexity int, postID string, authorID string) int
 		SetPostCommentsEnabled func(childComplexity int, postID string, authorID string, enabled bool) int
 	}
 
@@ -92,9 +95,30 @@ type ComplexityRoot struct {
 		Node   func(childComplexity int) int
 	}
 
+	PostPreview struct {
+		AuthorID        func(childComplexity int) int
+		CommentsEnabled func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		Excerpt         func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Title           func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+	}
+
+	PostPreviewConnection struct {
+		Edges    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
+	PostPreviewEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
 	Query struct {
-		Post  func(childComplexity int, id string) int
-		Posts func(childComplexity int, first *int, after *string) int
+		Comment func(childComplexity int, id string) int
+		Post    func(childComplexity int, id string) int
+		Posts   func(childComplexity int, first *int, after *string) int
 	}
 
 	Subscription struct {
@@ -107,15 +131,18 @@ type CommentResolver interface {
 }
 type MutationResolver interface {
 	CreatePost(ctx context.Context, input model.CreatePostInput) (*model.Post, error)
+	DeletePost(ctx context.Context, postID string, authorID string) (bool, error)
 	AddComment(ctx context.Context, input model.AddCommentInput) (*model.Comment, error)
+	DeleteComment(ctx context.Context, commentID string, authorID string) (bool, error)
 	SetPostCommentsEnabled(ctx context.Context, postID string, authorID string, enabled bool) (*model.Post, error)
 }
 type PostResolver interface {
 	Comments(ctx context.Context, obj *model.Post, first *int, after *string) (*model.CommentConnection, error)
 }
 type QueryResolver interface {
-	Posts(ctx context.Context, first *int, after *string) (*model.PostConnection, error)
+	Posts(ctx context.Context, first *int, after *string) (*model.PostPreviewConnection, error)
 	Post(ctx context.Context, id string) (*model.Post, error)
+	Comment(ctx context.Context, id string) (*model.Comment, error)
 }
 type SubscriptionResolver interface {
 	CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error)
@@ -153,6 +180,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Comment.ID(childComplexity), true
+	case "Comment.isDeleted":
+		if e.ComplexityRoot.Comment.IsDeleted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Comment.IsDeleted(childComplexity), true
 	case "Comment.parentID":
 		if e.ComplexityRoot.Comment.ParentID == nil {
 			break
@@ -231,6 +264,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreatePost(childComplexity, args["input"].(model.CreatePostInput)), true
+	case "Mutation.deleteComment":
+		if e.ComplexityRoot.Mutation.DeleteComment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteComment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteComment(childComplexity, args["commentID"].(string), args["authorID"].(string)), true
+	case "Mutation.deletePost":
+		if e.ComplexityRoot.Mutation.DeletePost == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deletePost_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeletePost(childComplexity, args["postID"].(string), args["authorID"].(string)), true
 	case "Mutation.setPostCommentsEnabled":
 		if e.ComplexityRoot.Mutation.SetPostCommentsEnabled == nil {
 			break
@@ -335,6 +390,87 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PostEdge.Node(childComplexity), true
+
+	case "PostPreview.authorID":
+		if e.ComplexityRoot.PostPreview.AuthorID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.AuthorID(childComplexity), true
+	case "PostPreview.commentsEnabled":
+		if e.ComplexityRoot.PostPreview.CommentsEnabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.CommentsEnabled(childComplexity), true
+	case "PostPreview.createdAt":
+		if e.ComplexityRoot.PostPreview.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.CreatedAt(childComplexity), true
+	case "PostPreview.excerpt":
+		if e.ComplexityRoot.PostPreview.Excerpt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.Excerpt(childComplexity), true
+	case "PostPreview.id":
+		if e.ComplexityRoot.PostPreview.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.ID(childComplexity), true
+	case "PostPreview.title":
+		if e.ComplexityRoot.PostPreview.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.Title(childComplexity), true
+	case "PostPreview.updatedAt":
+		if e.ComplexityRoot.PostPreview.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreview.UpdatedAt(childComplexity), true
+
+	case "PostPreviewConnection.edges":
+		if e.ComplexityRoot.PostPreviewConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreviewConnection.Edges(childComplexity), true
+	case "PostPreviewConnection.pageInfo":
+		if e.ComplexityRoot.PostPreviewConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreviewConnection.PageInfo(childComplexity), true
+
+	case "PostPreviewEdge.cursor":
+		if e.ComplexityRoot.PostPreviewEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreviewEdge.Cursor(childComplexity), true
+	case "PostPreviewEdge.node":
+		if e.ComplexityRoot.PostPreviewEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostPreviewEdge.Node(childComplexity), true
+
+	case "Query.comment":
+		if e.ComplexityRoot.Query.Comment == nil {
+			break
+		}
+
+		args, err := ec.field_Query_comment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Comment(childComplexity, args["id"].(string)), true
 
 	case "Query.post":
 		if e.ComplexityRoot.Query.Post == nil {
@@ -489,6 +625,26 @@ type Post {
   comments(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
 }
 
+type PostPreview {
+  id: ID!
+  authorID: String!
+  title: String!
+  excerpt: String!
+  commentsEnabled: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type PostPreviewEdge {
+  cursor: String!
+  node: PostPreview!
+}
+
+type PostPreviewConnection {
+  edges: [PostPreviewEdge!]!
+  pageInfo: PageInfo!
+}
+
 type Comment {
   id: ID!
   postID: ID!
@@ -496,6 +652,7 @@ type Comment {
   authorID: String!
   text: String!
   createdAt: Time!
+  isDeleted: Boolean!
 
   replies(first: Int, after: String): CommentConnection! @goField(forceResolver: true)
 }
@@ -540,13 +697,16 @@ input AddCommentInput {
 }
 
 type Query {
-  posts(first: Int, after: String): PostConnection!
+  posts(first: Int, after: String): PostPreviewConnection!
   post(id: ID!): Post
+  comment(id: ID!): Comment
 }
 
 type Mutation {
   createPost(input: CreatePostInput!): Post!
+  deletePost(postID: ID!, authorID: String!): Boolean!
   addComment(input: AddCommentInput!): Comment!
+  deleteComment(commentID: ID!, authorID: String!): Boolean!
   setPostCommentsEnabled(postID: ID!, authorID: String!, enabled: Boolean!): Post!
 }
 
@@ -575,6 +735,8 @@ func (ec *executionContext) childFields_Comment(ctx context.Context, field graph
 		return ec.fieldContext_Comment_text(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Comment_createdAt(ctx, field)
+	case "isDeleted":
+		return ec.fieldContext_Comment_isDeleted(ctx, field)
 	case "replies":
 		return ec.fieldContext_Comment_replies(ctx, field)
 	}
@@ -633,16 +795,6 @@ func (ec *executionContext) childFields_Post(ctx context.Context, field graphql.
 	return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 }
 
-func (ec *executionContext) childFields_PostConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "edges":
-		return ec.fieldContext_PostConnection_edges(ctx, field)
-	case "pageInfo":
-		return ec.fieldContext_PostConnection_pageInfo(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type PostConnection", field.Name)
-}
-
 func (ec *executionContext) childFields_PostEdge(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "cursor":
@@ -651,6 +803,46 @@ func (ec *executionContext) childFields_PostEdge(ctx context.Context, field grap
 		return ec.fieldContext_PostEdge_node(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PostEdge", field.Name)
+}
+
+func (ec *executionContext) childFields_PostPreview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_PostPreview_id(ctx, field)
+	case "authorID":
+		return ec.fieldContext_PostPreview_authorID(ctx, field)
+	case "title":
+		return ec.fieldContext_PostPreview_title(ctx, field)
+	case "excerpt":
+		return ec.fieldContext_PostPreview_excerpt(ctx, field)
+	case "commentsEnabled":
+		return ec.fieldContext_PostPreview_commentsEnabled(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_PostPreview_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_PostPreview_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PostPreview", field.Name)
+}
+
+func (ec *executionContext) childFields_PostPreviewConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "edges":
+		return ec.fieldContext_PostPreviewConnection_edges(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_PostPreviewConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PostPreviewConnection", field.Name)
+}
+
+func (ec *executionContext) childFields_PostPreviewEdge(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "cursor":
+		return ec.fieldContext_PostPreviewEdge_cursor(ctx, field)
+	case "node":
+		return ec.fieldContext_PostPreviewEdge_node(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PostPreviewEdge", field.Name)
 }
 
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -819,6 +1011,50 @@ func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteComment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "commentID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["commentID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "authorID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["authorID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deletePost_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "postID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["postID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "authorID",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["authorID"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setPostCommentsEnabled_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -882,6 +1118,20 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_comment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -1137,6 +1387,29 @@ func (ec *executionContext) fieldContext_Comment_createdAt(_ context.Context, fi
 	return graphql.NewScalarFieldContext("Comment", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
+func (ec *executionContext) _Comment_isDeleted(ctx context.Context, field graphql.CollectedField, obj *model.Comment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Comment_isDeleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IsDeleted, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Comment_isDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Comment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Comment_replies(ctx context.Context, field graphql.CollectedField, obj *model.Comment) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1344,6 +1617,50 @@ func (ec *executionContext) fieldContext_Mutation_createPost(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_deletePost(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deletePost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeletePost(ctx, fc.Args["postID"].(string), fc.Args["authorID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deletePost(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deletePost_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_addComment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1382,6 +1699,50 @@ func (ec *executionContext) fieldContext_Mutation_addComment(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_addComment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteComment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteComment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteComment(ctx, fc.Args["commentID"].(string), fc.Args["authorID"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteComment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteComment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -1802,6 +2163,286 @@ func (ec *executionContext) fieldContext_PostEdge_node(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _PostPreview_id(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_authorID(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_authorID(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_authorID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_title(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_excerpt(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_excerpt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Excerpt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_excerpt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_commentsEnabled(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_commentsEnabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CommentsEnabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_commentsEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreview_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.PostPreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreview_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreview_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreview", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreviewConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.PostPreviewConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreviewConnection_edges(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.PostPreviewEdge) graphql.Marshaler {
+			return ec.marshalNPostPreviewEdge2ᚕᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewEdgeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreviewConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostPreviewConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostPreviewEdge(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostPreviewConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.PostPreviewConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreviewConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreviewConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostPreviewConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostPreviewEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.PostPreviewEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreviewEdge_cursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreviewEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostPreviewEdge", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostPreviewEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.PostPreviewEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostPreviewEdge_node(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PostPreview) graphql.Marshaler {
+			return ec.marshalNPostPreview2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostPreviewEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostPreviewEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostPreview(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_posts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1815,8 +2456,8 @@ func (ec *executionContext) _Query_posts(ctx context.Context, field graphql.Coll
 			return ec.Resolvers.Query().Posts(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.PostConnection) graphql.Marshaler {
-			return ec.marshalNPostConnection2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostConnection(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *model.PostPreviewConnection) graphql.Marshaler {
+			return ec.marshalNPostPreviewConnection2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewConnection(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1829,7 +2470,7 @@ func (ec *executionContext) fieldContext_Query_posts(ctx context.Context, field 
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_PostConnection(ctx, field)
+			return ec.childFields_PostPreviewConnection(ctx, field)
 		},
 	}
 	defer func() {
@@ -1884,6 +2525,50 @@ func (ec *executionContext) fieldContext_Query_post(ctx context.Context, field g
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_post_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_comment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_comment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Comment(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Comment) graphql.Marshaler {
+			return ec.marshalOComment2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐComment(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_comment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Comment(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_comment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -3217,6 +3902,11 @@ func (ec *executionContext) _Comment(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "isDeleted":
+			out.Values[i] = ec._Comment_isDeleted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "replies":
 			field := field
 
@@ -3390,9 +4080,23 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "deletePost":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deletePost(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "addComment":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addComment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteComment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteComment(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -3661,6 +4365,163 @@ func (ec *executionContext) _PostEdge(ctx context.Context, sel ast.SelectionSet,
 	return out
 }
 
+var postPreviewImplementors = []string{"PostPreview"}
+
+func (ec *executionContext) _PostPreview(ctx context.Context, sel ast.SelectionSet, obj *model.PostPreview) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postPreviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostPreview")
+		case "id":
+			out.Values[i] = ec._PostPreview_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "authorID":
+			out.Values[i] = ec._PostPreview_authorID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._PostPreview_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "excerpt":
+			out.Values[i] = ec._PostPreview_excerpt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commentsEnabled":
+			out.Values[i] = ec._PostPreview_commentsEnabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._PostPreview_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._PostPreview_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var postPreviewConnectionImplementors = []string{"PostPreviewConnection"}
+
+func (ec *executionContext) _PostPreviewConnection(ctx context.Context, sel ast.SelectionSet, obj *model.PostPreviewConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postPreviewConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostPreviewConnection")
+		case "edges":
+			out.Values[i] = ec._PostPreviewConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._PostPreviewConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var postPreviewEdgeImplementors = []string{"PostPreviewEdge"}
+
+func (ec *executionContext) _PostPreviewEdge(ctx context.Context, sel ast.SelectionSet, obj *model.PostPreviewEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postPreviewEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostPreviewEdge")
+		case "cursor":
+			out.Values[i] = ec._PostPreviewEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "node":
+			out.Values[i] = ec._PostPreviewEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var queryImplementors = []string{"Query"}
 
 func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -3712,6 +4573,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_post(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "comment":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_comment(ctx, field)
 				return res
 			}
 
@@ -4227,20 +5107,6 @@ func (ec *executionContext) marshalNPost2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcom
 	return ec._Post(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPostConnection2githubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostConnection(ctx context.Context, sel ast.SelectionSet, v model.PostConnection) graphql.Marshaler {
-	return ec._PostConnection(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNPostConnection2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostConnection(ctx context.Context, sel ast.SelectionSet, v *model.PostConnection) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._PostConnection(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNPostEdge2ᚕᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PostEdge) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -4265,6 +5131,56 @@ func (ec *executionContext) marshalNPostEdge2ᚖgithubᚗcomᚋpidge31ᚋposts�
 		return graphql.Null
 	}
 	return ec._PostEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPostPreview2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreview(ctx context.Context, sel ast.SelectionSet, v *model.PostPreview) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostPreview(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPostPreviewConnection2githubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewConnection(ctx context.Context, sel ast.SelectionSet, v model.PostPreviewConnection) graphql.Marshaler {
+	return ec._PostPreviewConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPostPreviewConnection2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewConnection(ctx context.Context, sel ast.SelectionSet, v *model.PostPreviewConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostPreviewConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPostPreviewEdge2ᚕᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PostPreviewEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNPostPreviewEdge2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPostPreviewEdge2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐPostPreviewEdge(ctx context.Context, sel ast.SelectionSet, v *model.PostPreviewEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostPreviewEdge(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
@@ -4468,6 +5384,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOComment2ᚖgithubᚗcomᚋpidge31ᚋpostsᚑcommentsᚑserviceᚋinternalᚋgraphᚋmodelᚐComment(ctx context.Context, sel ast.SelectionSet, v *model.Comment) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Comment(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {

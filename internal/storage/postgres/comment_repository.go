@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -19,67 +20,70 @@ type CommentRepository struct {
 }
 
 func NewCommentRepository(pool *pgxpool.Pool) *CommentRepository {
-	return &CommentRepository{
-		pool: pool,
-	}
+	return &CommentRepository{pool: pool}
 }
 
 func (r *CommentRepository) Create(ctx context.Context, comment domain.Comment) error {
-	var parentID any
-	if comment.ParentID != nil {
-		parentID = *comment.ParentID
+	if comment.ParentID == nil {
+		_, err := r.pool.Exec(
+			ctx,
+			`INSERT INTO comments (id, post_id, parent_id, author_id, text, created_at)
+			 VALUES ($1::uuid, $2::uuid, NULL, $3, $4, $5)`,
+			comment.ID, comment.PostID, comment.AuthorID, comment.Text, comment.CreatedAt,
+		)
+
+		return mapPostgresCommentError(err)
 	}
 
-	_, err := r.pool.Exec(
-		ctx,
-		`
-		INSERT INTO comments (
-			id,
-			post_id,
-			parent_id,
-			author_id,
-			text,
-			created_at
-		)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
-		`,
-		comment.ID,
-		comment.PostID,
-		parentID,
-		comment.AuthorID,
-		comment.Text,
-		comment.CreatedAt,
-	)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return mapPostgresCommentError(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	return mapPostgresCommentError(err)
+	// Lock the parent row: blocks DELETE but not concurrent readers/writers.
+	// AND deleted_at IS NULL prevents replies to soft-deleted comments.
+	var parentPostID string
+	err = tx.QueryRow(
+		ctx,
+		`SELECT post_id::text FROM comments
+		 WHERE id = $1::uuid AND deleted_at IS NULL
+		 FOR KEY SHARE`,
+		*comment.ParentID,
+	).Scan(&parentPostID)
+	if err != nil {
+		return mapPostgresCommentError(err)
+	}
+
+	if parentPostID != comment.PostID {
+		return domain.ErrInvalidParentComment
+	}
+
+	_, err = tx.Exec(
+		ctx,
+		`INSERT INTO comments (id, post_id, parent_id, author_id, text, created_at)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)`,
+		comment.ID, comment.PostID, *comment.ParentID, comment.AuthorID, comment.Text, comment.CreatedAt,
+	)
+	if err != nil {
+		return mapPostgresCommentError(err)
+	}
+
+	return mapPostgresCommentError(tx.Commit(ctx))
 }
 
 func (r *CommentRepository) GetByID(ctx context.Context, id string) (*domain.Comment, error) {
 	var comment domain.Comment
 	var parentID sql.NullString
+	var deletedAt sql.NullTime
 
 	err := r.pool.QueryRow(
 		ctx,
-		`
-		SELECT
-			id::text,
-			post_id::text,
-			parent_id::text,
-			author_id,
-			text,
-			created_at
-		FROM comments
-		WHERE id = $1::uuid
-		`,
+		`SELECT id::text, post_id::text, parent_id::text, author_id, text, created_at, deleted_at
+		 FROM comments
+		 WHERE id = $1::uuid`,
 		id,
-	).Scan(
-		&comment.ID,
-		&comment.PostID,
-		&parentID,
-		&comment.AuthorID,
-		&comment.Text,
-		&comment.CreatedAt,
-	)
+	).Scan(&comment.ID, &comment.PostID, &parentID, &comment.AuthorID, &comment.Text, &comment.CreatedAt, &deletedAt)
 	if err != nil {
 		return nil, mapPostgresCommentError(err)
 	}
@@ -88,7 +92,39 @@ func (r *CommentRepository) GetByID(ctx context.Context, id string) (*domain.Com
 		comment.ParentID = &parentID.String
 	}
 
+	if deletedAt.Valid {
+		comment.DeletedAt = &deletedAt.Time
+	}
+
 	return &comment, nil
+}
+
+func (r *CommentRepository) Delete(ctx context.Context, commentID string, authorID string, deletedAt time.Time) error {
+	tag, err := r.pool.Exec(
+		ctx,
+		`UPDATE comments
+		 SET deleted_at = $1
+		 WHERE id = $2::uuid AND author_id = $3 AND deleted_at IS NULL`,
+		deletedAt, commentID, authorID,
+	)
+	if err != nil {
+		return mapPostgresCommentError(err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		existing, err := r.GetByID(ctx, commentID)
+		if err != nil {
+			return err
+		}
+
+		if existing.DeletedAt != nil {
+			return domain.ErrCommentNotFound
+		}
+
+		return domain.ErrForbidden
+	}
+
+	return nil
 }
 
 func (r *CommentRepository) ListByPostAndParent(
@@ -99,16 +135,12 @@ func (r *CommentRepository) ListByPostAndParent(
 	cursor *domain.CommentCursor,
 ) ([]domain.Comment, *domain.CommentCursor, error) {
 	pages, err := r.ListByPostAndParents(ctx, []ports.CommentListRequest{
-		{
-			PostID:   postID,
-			ParentID: parentID,
-			Limit:    limit,
-			Cursor:   cursor,
-		},
+		{PostID: postID, ParentID: parentID, Limit: limit, Cursor: cursor},
 	})
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if len(pages) == 0 {
 		return []domain.Comment{}, nil, nil
 	}
@@ -162,15 +194,9 @@ func (r *CommentRepository) ListByPostAndParents(
 		offset := len(args) + 1
 		values = append(values, fmt.Sprintf(
 			"($%d::int, $%d::uuid, $%d::uuid, $%d::timestamptz, $%d::uuid, $%d::int)",
-			offset,
-			offset+1,
-			offset+2,
-			offset+3,
-			offset+4,
-			offset+5,
+			offset, offset+1, offset+2, offset+3, offset+4, offset+5,
 		))
-		args = append(
-			args,
+		args = append(args,
 			activeIndexes[index],
 			request.PostID,
 			parentIDValue,
@@ -200,16 +226,11 @@ func (r *CommentRepository) ListByPostAndParents(
 			listed_comments.parent_id::text,
 			listed_comments.author_id,
 			listed_comments.text,
-			listed_comments.created_at
+			listed_comments.created_at,
+			listed_comments.deleted_at
 		FROM requests
 		JOIN LATERAL (
-			SELECT
-				id,
-				post_id,
-				parent_id,
-				author_id,
-				text,
-				created_at
+			SELECT id, post_id, parent_id, author_id, text, created_at, deleted_at
 			FROM comments
 			WHERE post_id = requests.post_id
 			  AND parent_id IS NOT DISTINCT FROM requests.parent_id
@@ -233,6 +254,7 @@ func (r *CommentRepository) ListByPostAndParents(
 		var requestIndex int
 		var comment domain.Comment
 		var scannedParentID sql.NullString
+		var scannedDeletedAt sql.NullTime
 
 		if err := rows.Scan(
 			&requestIndex,
@@ -242,6 +264,7 @@ func (r *CommentRepository) ListByPostAndParents(
 			&comment.AuthorID,
 			&comment.Text,
 			&comment.CreatedAt,
+			&scannedDeletedAt,
 		); err != nil {
 			return nil, mapPostgresCommentError(err)
 		}
@@ -252,6 +275,10 @@ func (r *CommentRepository) ListByPostAndParents(
 
 		if scannedParentID.Valid {
 			comment.ParentID = &scannedParentID.String
+		}
+
+		if scannedDeletedAt.Valid {
+			comment.DeletedAt = &scannedDeletedAt.Time
 		}
 
 		pages[requestIndex].Comments = append(pages[requestIndex].Comments, comment)
@@ -266,10 +293,10 @@ func (r *CommentRepository) ListByPostAndParents(
 			continue
 		}
 
-		lastComment := pages[index].Comments[request.Limit-1]
+		last := pages[index].Comments[request.Limit-1]
 		pages[index].NextCursor = &domain.CommentCursor{
-			CreatedAt: lastComment.CreatedAt,
-			ID:        lastComment.ID,
+			CreatedAt: last.CreatedAt,
+			ID:        last.ID,
 		}
 		pages[index].Comments = pages[index].Comments[:request.Limit]
 	}
