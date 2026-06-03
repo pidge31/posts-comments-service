@@ -91,3 +91,18 @@ func (b *Broker) SubscribeToPostComments(
 
 	return ch, closer, nil
 }
+
+func (b *Broker) Shutdown() {
+	b.mu.Lock()
+	var closers []func()
+	for _, subs := range b.subscribers {
+		for _, closer := range subs {
+			closers = append(closers, closer)
+		}
+	}
+	b.mu.Unlock()
+
+	for _, closer := range closers {
+		closer()
+	}
+}

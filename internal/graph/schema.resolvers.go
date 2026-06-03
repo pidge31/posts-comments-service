@@ -7,6 +7,7 @@ package graph
 
 import (
 	"context"
+	"log"
 
 	"github.com/pidge31/posts-comments-service/internal/app"
 	"github.com/pidge31/posts-comments-service/internal/graph/generated"
@@ -169,6 +170,11 @@ func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) 
 	go func() {
 		defer unsubscribe()
 		defer close(out)
+		defer func() {
+			if p := recover(); p != nil {
+				log.Printf("panic in CommentAdded subscription (postID=%s): %v", postID, p)
+			}
+		}()
 
 		for {
 			select {

@@ -77,6 +77,8 @@ func main() {
 
 	log.Println("shutting down server")
 
+	commentBroker.Shutdown()
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
