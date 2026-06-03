@@ -280,7 +280,9 @@ func TestGraphQL_DeletePost(t *testing.T) {
 	`)
 
 	var createData struct {
-		CreatePost struct{ ID string `json:"id"` } `json:"createPost"`
+		CreatePost struct {
+			ID string `json:"id"`
+		} `json:"createPost"`
 	}
 	unmarshalGraphQLData(t, createResp, &createData)
 	postID := createData.CreatePost.ID
@@ -322,7 +324,9 @@ func TestGraphQL_DeletePost_Forbidden(t *testing.T) {
 	`)
 
 	var createData struct {
-		CreatePost struct{ ID string `json:"id"` } `json:"createPost"`
+		CreatePost struct {
+			ID string `json:"id"`
+		} `json:"createPost"`
 	}
 	unmarshalGraphQLData(t, createResp, &createData)
 
@@ -350,7 +354,9 @@ func TestGraphQL_DeleteComment(t *testing.T) {
 	`)
 
 	var createPostData struct {
-		CreatePost struct{ ID string `json:"id"` } `json:"createPost"`
+		CreatePost struct {
+			ID string `json:"id"`
+		} `json:"createPost"`
 	}
 	unmarshalGraphQLData(t, createPostResp, &createPostData)
 	postID := createPostData.CreatePost.ID
@@ -362,7 +368,9 @@ func TestGraphQL_DeleteComment(t *testing.T) {
 	`, postID))
 
 	var addData struct {
-		AddComment struct{ ID string `json:"id"` } `json:"addComment"`
+		AddComment struct {
+			ID string `json:"id"`
+		} `json:"addComment"`
 	}
 	unmarshalGraphQLData(t, addResp, &addData)
 	commentID := addData.AddComment.ID
@@ -437,7 +445,9 @@ func TestGraphQL_DeleteComment_Forbidden(t *testing.T) {
 	`)
 
 	var createPostData struct {
-		CreatePost struct{ ID string `json:"id"` } `json:"createPost"`
+		CreatePost struct {
+			ID string `json:"id"`
+		} `json:"createPost"`
 	}
 	unmarshalGraphQLData(t, createPostResp, &createPostData)
 
@@ -448,7 +458,9 @@ func TestGraphQL_DeleteComment_Forbidden(t *testing.T) {
 	`, createPostData.CreatePost.ID))
 
 	var addData struct {
-		AddComment struct{ ID string `json:"id"` } `json:"addComment"`
+		AddComment struct {
+			ID string `json:"id"`
+		} `json:"addComment"`
 	}
 	unmarshalGraphQLData(t, addResp, &addData)
 
